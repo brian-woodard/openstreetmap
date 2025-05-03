@@ -26,8 +26,11 @@ std::shared_ptr<CShader> shader_line = nullptr;
 std::shared_ptr<CTexture> texture = nullptr;
 int window_width = WIDTH;
 int window_height = HEIGHT;
+int map_width = WIDTH;
+int map_height = HEIGHT;
 COpenStreetMap map;
 float map_rotation = 0.0f;
+bool draw_boundaries = false;
 
 void resize(GLFWwindow* window, int width, int height)
 {
@@ -58,6 +61,8 @@ void render()
 
    map.SetProjection(mvp);
    map.SetMapRotation(map_rotation);
+   map.EnableSubframeBoundaries(draw_boundaries);
+   map.SetMapSize(map_width, map_height);
    map.Update();
    map.Draw();
 
@@ -140,9 +145,7 @@ int main(int argc, char* argv[])
    map.SetMapCenter(38.93916666, -77.46);
    map.SetMapRotation(0.0f);
    map.SetMapScaleFactor(10000000.0f);
-   map.SetMapSize(WIDTH, HEIGHT);
    map.SetShaders(shader_rect, shader_line);
-   map.EnableSubframeBoundaries(true);
 
    while (window)
    {
@@ -168,7 +171,10 @@ int main(int argc, char* argv[])
       ImGui::NewFrame();
 
       ImGui::Begin("Debug");
+      ImGui::Checkbox("Draw Boundaries", &draw_boundaries);
       ImGui::SliderFloat("Map Rotation", &map_rotation, -180.0f, 180.0f);
+      ImGui::SliderInt("Map Width", &map_width, WIDTH, WIDTH * 2);
+      ImGui::SliderInt("Map Height", &map_height, HEIGHT, HEIGHT * 2);
       ImGui::End();
 
       // Render ImGui

@@ -18,7 +18,8 @@ bool CGlRect::mRectInitialized = false;
 // Constructor
 CGlRect::CGlRect(std::shared_ptr<CShader>& Shader, float X, float Y, float Width, float Height)
    : CGlObject(Shader, X, Y, Width, Height),
-     mTranslate(0.0f), mBorderColor(0.0f), mBorderThickness(0.0f), mCornerRadius(0.0f), mEdgeSoftness(0.0f), mRotationRadians(0.0f), mTexture(nullptr)
+     mModel(1.0f),
+     mBorderColor(0.0f), mBorderThickness(0.0f), mCornerRadius(0.0f), mEdgeSoftness(0.0f), mTexture(nullptr)
 {
    if (!mRectInitialized)
       InitBuffers();
@@ -117,14 +118,19 @@ void CGlRect::SetEdgeSoftness(float Softness)
    mEdgeSoftness = Softness;
 }
 
+void CGlRect::SetModelMatrix(const glm::mat4& Model)
+{
+   mModel = Model;
+}
+
 void CGlRect::SetTranslate(const glm::vec3& Translate)
 {
-   mTranslate = Translate;
+   mModel = glm::translate(mModel, Translate);
 }
 
 void CGlRect::SetRotation(float Rotation)
 {
-   mRotationRadians = Rotation;
+   mModel = glm::rotate(mModel, Rotation, glm::vec3(0.0f, 0.0f, 1.0f));
 }
 
 void CGlRect::SetTexture(std::shared_ptr<CTexture> Texture)
@@ -155,8 +161,7 @@ void CGlRect::Render(const glm::mat4& Projection)
    vertices_ur = glm::vec2( mWidth * 0.5f,  mHeight * 0.5f);
 
    transform = glm::translate(transform, glm::vec3(mX, mY, 0.0f));
-   transform = glm::rotate(transform, mRotationRadians, glm::vec3(0.0f, 0.0f, 1.0f));
-   transform = glm::translate(transform, mTranslate);
+   transform *= mModel;
 
    mShader->SetUniform("transform", transform);
 
