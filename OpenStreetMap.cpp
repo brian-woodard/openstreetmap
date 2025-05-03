@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstring>
 #include <fstream>
+#include <glm/gtc/matrix_transform.hpp>
 #include "OpenStreetMap.h"
 #include "GlLineStrip.h"
 #include "GlRect.h"
@@ -454,23 +455,37 @@ void COpenStreetMap::Draw()
       mDisplayList[i].Texture->Draw();
 #endif
 
+      glm::mat4 model(1.0f);
+
+      model = glm::rotate(model, (float)(-mMapRotation * DEGREES_TO_RADIANS), glm::vec3(0.0f, 0.0f, 1.0f));
+      model = glm::translate(model, glm::vec3(center_tile_pixels_x + offset_pixels_x,
+                                              center_tile_pixels_y + offset_pixels_y,
+                                              0.0f));
+      model = glm::scale(model, glm::vec3(mMapScaleX, mMapScaleY, 0.0f));
+
       // draw the subframe boundary
       if (mDrawSubframeBoundaries)
       {
          CGlLineStrip           linestrip = CGlLineStrip(mShaderLine, 0.0f, 0.0f, 0.0f, 0.0f);
+         CGlRect                rect = CGlRect(mShaderRect, 0.0f, 0.0f, (float)OSM_TILE_SIZE, (float)OSM_TILE_SIZE);
+         float                  half_size = (float)OSM_TILE_SIZE * 0.5f;
          std::vector<glm::vec3> points;
 
-         points.push_back(glm::vec3(-128.0f, -128.0f, 0.0f));
-         points.push_back(glm::vec3(-128.0f,  128.0f, 0.0f));
-         points.push_back(glm::vec3( 128.0f,  128.0f, 0.0f));
-         points.push_back(glm::vec3( 128.0f, -128.0f, 0.0f));
-         points.push_back(glm::vec3(-128.0f, -128.0f, 0.0f));
+         points.push_back(glm::vec3(-half_size, -half_size, 0.0f));
+         points.push_back(glm::vec3(-half_size,  half_size, 0.0f));
+         points.push_back(glm::vec3( half_size,  half_size, 0.0f));
+         points.push_back(glm::vec3( half_size, -half_size, 0.0f));
+         points.push_back(glm::vec3(-half_size, -half_size, 0.0f));
 
          linestrip.SetLineWidth(3.0f);
          linestrip.SetColor(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
          linestrip.SetVertices(&points);
-         //linestrip.SetModelMatrix(model);
+         linestrip.SetModelMatrix(model);
          linestrip.Render(mMapProjection);
+
+         rect.SetColor(glm::vec4(1.0f, 0.0f, 0.0f, 0.2f));
+         rect.SetModelMatrix(model);
+         rect.Render(mMapProjection);
       }
    }
 
@@ -534,6 +549,7 @@ void COpenStreetMap::Draw()
       coverage.SetLineWidth(3.0f);
       coverage.SetColor(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
       coverage.SetVertices(&points);
+      coverage.SetModelMatrix(glm::mat4(1.0f));
       coverage.SetRotation(-mMapRotation * DEGREES_TO_RADIANS);
       coverage.Render(mMapProjection);
    }

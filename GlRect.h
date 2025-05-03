@@ -26,6 +26,8 @@ public:
    void SetCornerRadius(float Radius);
    void SetEdgeSoftness(float Softness);
 
+   void SetModelMatrix(const glm::mat4& Model);
+
    void SetTranslate(const glm::vec3& Translate);
    void SetRotation(float Rotation);
 
@@ -37,13 +39,12 @@ private:
    static unsigned int mVAO;            // Vertex Array Object
    static unsigned int mVBO;            // Vertex Buffer Object
    static unsigned int mEBO;            // Element Buffer Object for polygons
-   glm::vec3 mTranslate;
+   glm::mat4 mModel;
    glm::vec4 mColor[4];
    glm::vec4 mBorderColor;
    float mBorderThickness;
    float mCornerRadius;
    float mEdgeSoftness;
-   float mRotationRadians;
    std::shared_ptr<CTexture> mTexture;
 
    static bool mRectInitialized;

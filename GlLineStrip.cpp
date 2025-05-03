@@ -17,7 +17,8 @@ bool CGlLineStrip::mLineStripInitialized = false;
 // Constructor
 CGlLineStrip::CGlLineStrip(std::shared_ptr<CShader>& Shader, float X, float Y, float Width, float Height)
    : CGlObject(Shader, X, Y, Width, Height),
-     mLineWidth(1.0f), mRotationRadians(0.0f), mVertices(nullptr), mAllowMultipleDrawCalls(true)
+     mModel(1.0f),
+     mLineWidth(1.0f), mVertices(nullptr), mAllowMultipleDrawCalls(true)
 {
    if (!mLineStripInitialized)
       InitBuffers();
@@ -52,9 +53,14 @@ void CGlLineStrip::SetColor(const glm::vec4& Color)
    mColor = Color;
 }
 
+void CGlLineStrip::SetModelMatrix(const glm::mat4& Model)
+{
+   mModel = Model;
+}
+
 void CGlLineStrip::SetRotation(float Rotation)
 {
-   mRotationRadians = Rotation;
+   mModel = glm::rotate(mModel, Rotation, glm::vec3(0.0f, 0.0f, 1.0f));
 }
 
 void CGlLineStrip::SetVertices(std::vector<glm::vec3>* Vertices)
@@ -77,9 +83,7 @@ void CGlLineStrip::Render(const glm::mat4& Projection)
    GLCALL(glBindVertexArray(mVAO));
 
    // Set the transformation matrix
-   glm::mat4 transform = Projection;
-
-   transform = glm::rotate(transform, mRotationRadians, glm::vec3(0.0f, 0.0f, 1.0f));
+   glm::mat4 transform = Projection * mModel;
 
    mShader->SetUniform("transform", transform);
    mShader->SetUniform("uColor", mColor);
