@@ -8,6 +8,7 @@
 #include <memory>
 #include <glm/glm.hpp>
 #include "Shader.h"
+#include "Cache.h"
 
 #define OSM_IMAGE_CACHE_SIZE 1024
 #define OSM_TILE_SIZE        256
@@ -76,18 +77,17 @@ private:
       }
    };
 
-   typedef std::vector<TCacheTag> TSubframeCoverageList;
-
-   //typedef CVCache<TTile, TCacheTag, OSM_IMAGE_CACHE_SIZE> TImageCache;
+   using TTileList = std::vector<TCacheTag>;
+   using TImageCache = Cache<TTile, TCacheTag, OSM_IMAGE_CACHE_SIZE>;
 
    std::string ConstructFilename(int Zoom, int X, int Y);
 
    void CoverageThread();
 
-   //void CoverageImage(TSubframeCoverageList& SubframeCoverageList,
-   //                   std::vector<TTile>&    DisplayListScratchpad,
-   //                   std::vector<TTile>&    DisplayListTrashScratchpad,
-   //                   TImageCache&           ImageCache);
+   void UpdateCache(TTileList&          TileList,
+                    std::vector<TTile>& DisplayListScratchpad,
+                    std::vector<TTile>& DisplayListTrashScratchpad,
+                    TImageCache&        ImageCache);
 
    //void CreateNoDataTile();
 
@@ -103,7 +103,7 @@ private:
 
    double GetMetersPerPixelNs(int Zoom);
 
-   //void GetSubframeCoverageList(TSubframeCoverageList& SubframeCoverageList, double MapCenterLat, double MapCenterLon, int ZoomLevel, double CoverageRadiusPixels);
+   void GetTileList(TTileList& TileList, double MapCenterLat, double MapCenterLon, int ZoomLevel, double CoverageRadiusPixels);
 
    int GetTileX(double Longitude, int Zoom);
 

@@ -86,22 +86,20 @@ std::string COpenStreetMap::ConstructFilename(int Zoom, int X, int Y)
 
 void COpenStreetMap::CoverageThread()
 {
-   //TSubframeCoverageList subframe_coverage_list;
-   std::vector<TTile>    display_list_trash_scratchpad;
-   std::vector<TTile>    display_list_scratchpad;
-   TTile                 tile;
-   double                map_center_lat;
-   double                map_center_lon;
-   double                coverage_radius_scale_factor;
-   double                coverage_radius_pixels;
-   double                scale_x;
-   double                scale_y;
-   double                map_zoom;
-   int                   zoom_level;
-   int                   window_width;
-   int                   window_height;
-
-   //static TImageCache image_cache;
+   TImageCache        image_cache;
+   TTileList          tile_list;
+   std::vector<TTile> display_list_trash_scratchpad;
+   std::vector<TTile> display_list_scratchpad;
+   double             map_center_lat;
+   double             map_center_lon;
+   double             coverage_radius_scale_factor;
+   double             coverage_radius_pixels;
+   double             scale_x;
+   double             scale_y;
+   double             map_zoom;
+   int                zoom_level;
+   int                window_width;
+   int                window_height;
 
    // loop until terminated
    while (!mTerminateCoverageThread)
@@ -147,15 +145,15 @@ void COpenStreetMap::CoverageThread()
             }
          }
 
-         // get the subframe coverage list
-         //subframe_coverage_list.clear();
-         //GetSubframeCoverageList(subframe_coverage_list, map_center_lat, map_center_lon, zoom_level, coverage_radius_pixels);
+         // get the tile list
+         tile_list.clear();
+         GetTileList(tile_list, map_center_lat, map_center_lon, zoom_level, coverage_radius_pixels);
 
-         // process the image coverage
-         //CoverageImage(subframe_coverage_list,
-         //            display_list_scratchpad,
-         //            display_list_trash_scratchpad,
-         //            image_cache);
+         // update the image cache
+         UpdateCache(tile_list,
+                     display_list_scratchpad,
+                     display_list_trash_scratchpad,
+                     image_cache);
 
          // grab the mutex to make this chunk of code thread safe
          mMutex.lock();
@@ -188,6 +186,7 @@ void COpenStreetMap::CoverageThread()
    // be deleted by the Close function
    //for (int i = 0; i < image_cache.Size(); i++)
    //{
+   //   TTile tile;
    //   if (image_cache.Peek(tile, i))
    //   {
    //      mDisplayListTrash.push_back(tile);
@@ -197,11 +196,10 @@ void COpenStreetMap::CoverageThread()
    mMutex.unlock();
 }
 
-#if 0
-void COpenStreetMap::CoverageImage(TSubframeCoverageList& SubframeCoverageList,
-                                   std::vector<TTile>&    DisplayListScratchpad,
-                                   std::vector<TTile>&    DisplayListTrashScratchpad,
-                                   TImageCache&           ImageCache)
+void COpenStreetMap::UpdateCache(TTileList&          TileList,
+                                 std::vector<TTile>& DisplayListScratchpad,
+                                 std::vector<TTile>& DisplayListTrashScratchpad,
+                                 TImageCache&        ImageCache)
 {
    TTile                      tile;
    TTile                      trash_tile;
@@ -211,12 +209,12 @@ void COpenStreetMap::CoverageImage(TSubframeCoverageList& SubframeCoverageList,
    bool                       result;
 
    // loop over the subframe coverage list
-   for (int i = 0; i < SubframeCoverageList.size(); i++)
+   for (int i = 0; i < TileList.size(); i++)
    {
       // check for terminate again to speed up exiting
       if (mTerminateCoverageThread) return;
 
-      if (!ImageCache.Get(tile, SubframeCoverageList[i]))
+      if (!ImageCache.Get(tile, TileList[i]))
       {
          // resize the png file buffer to 0
          png_file_buffer.resize(0);
@@ -225,9 +223,9 @@ void COpenStreetMap::CoverageImage(TSubframeCoverageList& SubframeCoverageList,
          if (mCacheEnabled)
          {
             // construct the file name
-            png_filename = ConstructFilename(SubframeCoverageList[i].Zoom,
-                                             SubframeCoverageList[i].X,
-                                             SubframeCoverageList[i].Y);
+            png_filename = ConstructFilename(TileList[i].Zoom,
+                                             TileList[i].X,
+                                             TileList[i].Y);
 
             // open the file
             std::ifstream png_file(png_filename, std::ios::in | std::ios::binary | std::ios::ate);
@@ -250,9 +248,9 @@ void COpenStreetMap::CoverageImage(TSubframeCoverageList& SubframeCoverageList,
          {
             // get the png file from the Osm server
             //result = mWmtsIf.GetMapPng(png_file_buffer,
-            //                           SubframeCoverageList[i].Zoom,
-            //                           SubframeCoverageList[i].X,
-            //                           SubframeCoverageList[i].Y);
+            //                           TileList[i].Zoom,
+            //                           TileList[i].X,
+            //                           TileList[i].Y);
             result = false;
 
             if (result)
@@ -261,11 +259,12 @@ void COpenStreetMap::CoverageImage(TSubframeCoverageList& SubframeCoverageList,
                // includes the local png file
                if ((png_file_buffer.size() > 0) && mCacheEnabled)
                {
-#ifdef LINUX
-                  mkdir(mCachePath.c_str(), 0775);
-#else
-                  mkdir(mCachePath.c_str());
-#endif
+//TODO: Use std::filesystem
+//#ifdef LINUX
+//                  mkdir(mCachePath.c_str(), 0775);
+//#else
+//                  mkdir(mCachePath.c_str());
+//#endif
 
                   std::ofstream png_file(png_filename, std::ios::out | std::ios::binary | std::ios::trunc);
 
@@ -285,22 +284,22 @@ void COpenStreetMap::CoverageImage(TSubframeCoverageList& SubframeCoverageList,
          if (png_file_buffer.size() > 0)
          {
             // extract the rgb image from the png file
-            CVPngFile png_file(&png_file_buffer[0], png_file_buffer.size());
+            //CVPngFile png_file(&png_file_buffer[0], png_file_buffer.size());
 
-            if (png_file.Image() == nullptr) continue;
+            //if (png_file.Image() == nullptr) continue;
 
-            double ul_lat = GetLatitudeFromTileY(SubframeCoverageList[i].Y, SubframeCoverageList[i].Zoom);
-            double ul_lon = GetLongitudeFromTileX(SubframeCoverageList[i].X, SubframeCoverageList[i].Zoom);
-            double br_lat = GetLatitudeFromTileY(SubframeCoverageList[i].Y+1, SubframeCoverageList[i].Zoom);
-            double br_lon = GetLongitudeFromTileX(SubframeCoverageList[i].X+1, SubframeCoverageList[i].Zoom);
+            double ul_lat = GetLatitudeFromTileY(TileList[i].Y, TileList[i].Zoom);
+            double ul_lon = GetLongitudeFromTileX(TileList[i].X, TileList[i].Zoom);
+            double br_lat = GetLatitudeFromTileY(TileList[i].Y+1, TileList[i].Zoom);
+            double br_lon = GetLongitudeFromTileX(TileList[i].X+1, TileList[i].Zoom);
 
             // allocate a new image
-            tile.Texture   = new COpenStreetMap((COpenStreetMap::TImagePtr) png_file.Image(), png_filename.c_str(), OSM_TILE_SIZE, OSM_TILE_SIZE);
+            //tile.Texture   = new COpenStreetMap((COpenStreetMap::TImagePtr) png_file.Image(), png_filename.c_str(), OSM_TILE_SIZE, OSM_TILE_SIZE);
             tile.Latitude  = (ul_lat + br_lat) / 2.0;
             tile.Longitude = (ul_lon + br_lon) / 2.0;
-            tile.ZoomLevel = SubframeCoverageList[i].Zoom;
-            tile.TileX     = SubframeCoverageList[i].X;
-            tile.TileY     = SubframeCoverageList[i].Y;
+            tile.ZoomLevel = TileList[i].Zoom;
+            tile.TileX     = TileList[i].X;
+            tile.TileY     = TileList[i].Y;
 
             //tile.Texture->SetAlpha(0.5f);
 
@@ -310,47 +309,48 @@ void COpenStreetMap::CoverageImage(TSubframeCoverageList& SubframeCoverageList,
                // remove the oldest image from the cache
                ImageCache.GetBack(trash_tile);
 
-               if (trash_tile.Texture != mNoDataTile.Texture)
-               {
-                  // move the old image onto the display list trash
-                  // scratchpad
-                  DisplayListTrashScratchpad.push_back(trash_tile);
-               }
+               //if (trash_tile.Texture != mNoDataTile.Texture)
+               //{
+               //   // move the old image onto the display list trash
+               //   // scratchpad
+               //   DisplayListTrashScratchpad.push_back(trash_tile);
+               //}
             }
 
             // put the new image onto the cache
-            ImageCache.PutFront(tile, SubframeCoverageList[i]);
-         } 
+            ImageCache.PutFront(tile, TileList[i]);
+         }
          else
          {
-            double ul_lat = GetLatitudeFromTileY(SubframeCoverageList[i].Y, SubframeCoverageList[i].Zoom);
-            double ul_lon = GetLongitudeFromTileX(SubframeCoverageList[i].X, SubframeCoverageList[i].Zoom);
-            double br_lat = GetLatitudeFromTileY(SubframeCoverageList[i].Y+1, SubframeCoverageList[i].Zoom);
-            double br_lon = GetLongitudeFromTileX(SubframeCoverageList[i].X+1, SubframeCoverageList[i].Zoom);
+            double ul_lat = GetLatitudeFromTileY(TileList[i].Y, TileList[i].Zoom);
+            double ul_lon = GetLongitudeFromTileX(TileList[i].X, TileList[i].Zoom);
+            double br_lat = GetLatitudeFromTileY(TileList[i].Y+1, TileList[i].Zoom);
+            double br_lon = GetLongitudeFromTileX(TileList[i].X+1, TileList[i].Zoom);
 
-            if (!mNoDataTile.Texture)
-               CreateNoDataTile();
+            //if (!mNoDataTile.Texture)
+               //CreateNoDataTile();
 
             // could not get the image from the OpenStreetMap server or local cache
-            tile.Texture   = mNoDataTile.Texture;
+            //tile.Texture   = mNoDataTile.Texture;
             tile.Latitude  = (ul_lat + br_lat) / 2.0;
             tile.Longitude = (ul_lon + br_lon) / 2.0;
-            tile.ZoomLevel = SubframeCoverageList[i].Zoom;
-            tile.TileX     = SubframeCoverageList[i].X;
-            tile.TileY     = SubframeCoverageList[i].Y;
+            tile.ZoomLevel = TileList[i].Zoom;
+            tile.TileX     = TileList[i].X;
+            tile.TileY     = TileList[i].Y;
 
             //tile.Texture->SetAlpha(0.5f);
          }
       }
 
       // add the new image to the display list scratchpad
-      if (tile.Texture)
+      //if (tile.Texture)
       {
          DisplayListScratchpad.push_back(tile);
       }
    }
 }
 
+#if 0
 void COpenStreetMap::CreateNoDataTile()
 {
    if (!mNoDataTile.Texture)
@@ -407,13 +407,12 @@ void COpenStreetMap::Draw()
 
    mDrawUpdate = true;
 
-#if 0
    if (mDisplayList.size())
    {
       // calculate the image offset in pixels from the map center of rotation
       // for the center tile
-      center_tile_pixels_x = (mDisplayList[0].Longitude - mMapCenterLon) / mRpfDegPerPixEw;
-      center_tile_pixels_y = (mDisplayList[0].Latitude - mMapCenterLat) / mRpfDegPerPixNs;
+      //center_tile_pixels_x = (mDisplayList[0].Longitude - mMapCenterLon) / mRpfDegPerPixEw;
+      //center_tile_pixels_y = (mDisplayList[0].Latitude - mMapCenterLat) / mRpfDegPerPixNs;
       center_tile_x        = mDisplayList[0].TileX;
       center_tile_y        = mDisplayList[0].TileY;
    }
@@ -421,11 +420,11 @@ void COpenStreetMap::Draw()
    // loop through the display list
    for (int i = 0; i < mDisplayList.size(); i++)
    {
-      if (!mDisplayList[i].Texture)
-         continue;
+      //if (!mDisplayList[i].Texture)
+      //   continue;
 
-      // create the image if needed
-      if (!mDisplayList[i].Texture->IsCreated()) mDisplayList[i].Texture->Create();
+      //// create the image if needed
+      //if (!mDisplayList[i].Texture->IsCreated()) mDisplayList[i].Texture->Create();
 
       if (mDisplayList[i].ZoomLevel != mZoomLevel)
          continue;
@@ -433,6 +432,7 @@ void COpenStreetMap::Draw()
       offset_pixels_x = (mDisplayList[i].TileX - mDisplayList[0].TileX) * OSM_TILE_SIZE * mMapScaleX;
       offset_pixels_y = -(mDisplayList[i].TileY - mDisplayList[0].TileY) * OSM_TILE_SIZE * mMapScaleY;
 
+#if 0
       // set the image brightness
       mDisplayList[i].Texture->SetBrightness(mMapBrightness);
 
@@ -452,30 +452,29 @@ void COpenStreetMap::Draw()
 
       // draw the tile
       mDisplayList[i].Texture->Draw();
+#endif
 
       // draw the subframe boundary
       if (mDrawSubframeBoundaries)
       {
-         if (LineProgram)
-         {
-            CGLLineStrip linestrip(5);
+         CGlLineStrip           linestrip = CGlLineStrip(mShaderLine, 0.0f, 0.0f, 0.0f, 0.0f);
+         std::vector<glm::vec3> points;
 
-            linestrip.AddPoint(-128, -128);
-            linestrip.AddPoint(-128,  128);
-            linestrip.AddPoint( 128,  128);
-            linestrip.AddPoint( 128, -128);
-            linestrip.AddPoint(-128, -128);
+         points.push_back(glm::vec3(-128.0f, -128.0f, 0.0f));
+         points.push_back(glm::vec3(-128.0f,  128.0f, 0.0f));
+         points.push_back(glm::vec3( 128.0f,  128.0f, 0.0f));
+         points.push_back(glm::vec3( 128.0f, -128.0f, 0.0f));
+         points.push_back(glm::vec3(-128.0f, -128.0f, 0.0f));
 
-            linestrip.SetLineWidth(3.0f);
-            linestrip.SetColor(QVector4D(1.0f, 0.0f, 0.0f, 1.0f));
-            linestrip.SetModelMatrix(model);
-            linestrip.SetProjectionMatrix(MapProjection);
-
-            linestrip.Draw();
-         }
+         linestrip.SetLineWidth(3.0f);
+         linestrip.SetColor(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+         linestrip.SetVertices(&points);
+         //linestrip.SetModelMatrix(model);
+         linestrip.Render(mMapProjection);
       }
    }
 
+#if 0
    // Delete any tiles that have been evicted from the cache
    for (int i = 0; i < mDisplayListTrash.size(); i++)
    {
@@ -598,37 +597,36 @@ double COpenStreetMap::GetMetersPerPixelNs(int Zoom)
    return EQUATOR_CIRCUMFERENCE_M / (double)(1 << (Zoom + 8));
 }
 
-#if 0
-void COpenStreetMap::GetSubframeCoverageList(TSubframeCoverageList& SubframeCoverageList, double MapCenterLat, double MapCenterLon, int ZoomLevel, double CoverageRadiusPixels)
+void COpenStreetMap::GetTileList(TTileList& TileList, double MapCenterLat, double MapCenterLon, int ZoomLevel, double CoverageRadiusPixels)
 {
-   TCacheTag subframe_coverage_list_item;
+   TCacheTag tile;
    int       max_tiles = (1 << ZoomLevel);
    int       x = GetTileX(MapCenterLon, ZoomLevel);
    int       y = GetTileY(MapCenterLat, ZoomLevel);
    int       level = 0; // 0=1x1, 1=3x3, 2=5x5...
-   bool      coverage_complete = false;
+   bool      complete = false;
 
    if (ZoomLevel < 2)
    {
       // just add the center tile to the coverage list
-      subframe_coverage_list_item.Zoom = ZoomLevel;
-      subframe_coverage_list_item.X = x;
-      subframe_coverage_list_item.Y = y;
+      tile.Zoom = ZoomLevel;
+      tile.X = x;
+      tile.Y = y;
 
-      SubframeCoverageList.push_back(subframe_coverage_list_item);
+      TileList.push_back(tile);
    }
    else
    {
-      while (!coverage_complete)
+      while (!complete)
       {
          if (level == 0)
          {
             // add the center tile to the coverage list
-            subframe_coverage_list_item.Zoom = ZoomLevel;
-            subframe_coverage_list_item.X = x;
-            subframe_coverage_list_item.Y = y;
+            tile.Zoom = ZoomLevel;
+            tile.X = x;
+            tile.Y = y;
 
-            SubframeCoverageList.push_back(subframe_coverage_list_item);
+            TileList.push_back(tile);
 
             level++;
          }
@@ -647,17 +645,17 @@ void COpenStreetMap::GetSubframeCoverageList(TSubframeCoverageList& SubframeCove
 
                if (y <= 0)
                {
-                  coverage_complete = true;
+                  complete = true;
                   break;
                }
 
                // add tile to the coverage list
-               subframe_coverage_list_item.X = x;
-               subframe_coverage_list_item.Y = y;
-               SubframeCoverageList.push_back(subframe_coverage_list_item);
+               tile.X = x;
+               tile.Y = y;
+               TileList.push_back(tile);
             }
 
-            if (coverage_complete)
+            if (complete)
                break;
 
             // move left by two times the "level" number of tiles
@@ -667,17 +665,17 @@ void COpenStreetMap::GetSubframeCoverageList(TSubframeCoverageList& SubframeCove
 
                if (x <= 0)
                {
-                  coverage_complete = true;
+                  complete = true;
                   break;
                }
 
                // add tile to the coverage list
-               subframe_coverage_list_item.X = x;
-               subframe_coverage_list_item.Y = y;
-               SubframeCoverageList.push_back(subframe_coverage_list_item);
+               tile.X = x;
+               tile.Y = y;
+               TileList.push_back(tile);
             }
 
-            if (coverage_complete)
+            if (complete)
                break;
 
             // move down by two times the "level" number of tiles
@@ -687,17 +685,17 @@ void COpenStreetMap::GetSubframeCoverageList(TSubframeCoverageList& SubframeCove
 
                if (y >= max_tiles)
                {
-                  coverage_complete = true;
+                  complete = true;
                   break;
                }
 
                // add tile to the coverage list
-               subframe_coverage_list_item.X = x;
-               subframe_coverage_list_item.Y = y;
-               SubframeCoverageList.push_back(subframe_coverage_list_item);
+               tile.X = x;
+               tile.Y = y;
+               TileList.push_back(tile);
             }
 
-            if (coverage_complete)
+            if (complete)
                break;
 
             // move right by two times the "level" number of tiles
@@ -707,31 +705,30 @@ void COpenStreetMap::GetSubframeCoverageList(TSubframeCoverageList& SubframeCove
 
                if (x >= max_tiles)
                {
-                  coverage_complete = true;
+                  complete = true;
                   break;
                }
 
                // add tile to the coverage list
-               subframe_coverage_list_item.X = x;
-               subframe_coverage_list_item.Y = y;
-               SubframeCoverageList.push_back(subframe_coverage_list_item);
+               tile.X = x;
+               tile.Y = y;
+               TileList.push_back(tile);
             }
 
-            if (coverage_complete)
+            if (complete)
                break;
 
             // check if level is enough to meet the coverage area
             double pixels_in_level = ((level * 2.0) + 1.0) * OSM_TILE_SIZE;
 
             if (pixels_in_level > CoverageRadiusPixels)
-               coverage_complete = true;
+               complete = true;
 
             level++;
          }
       }
    }
 }
-#endif
 
 int COpenStreetMap::GetTileX(double Longitude, int Zoom)
 {
