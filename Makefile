@@ -12,7 +12,7 @@ all:
 #	g++ $(CXXFLAGS) -c GlLineStrip.cpp -o GlLineStrip.o
 #	g++ $(CXXFLAGS) -c GlRect.cpp -o GlRect.o
 #	g++ $(CXXFLAGS) -c Shader.cpp -o Shader.o
-#	g++ $(CXXFLAGS) -c Texture.cpp -o Texture.o
+	g++ $(CXXFLAGS) -c Texture.cpp -o Texture.o
 	g++ $(CXXFLAGS) -c OpenStreetMap.cpp -o OpenStreetMap.o
 	g++ $(CXXFLAGS) main.cpp -o main -lglfw GlObject.o GlLineStrip.o GlRect.o Shader.o Texture.o OpenStreetMap.o glad/glad.o imgui.o imgui_draw.o imgui_tables.o imgui_widgets.o imgui_impl_glfw.o imgui_impl_opengl3.o exec.a jsoncpp.o
 

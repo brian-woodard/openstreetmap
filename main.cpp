@@ -24,6 +24,7 @@
 std::shared_ptr<CShader> shader_rect = nullptr;
 std::shared_ptr<CShader> shader_line = nullptr;
 std::shared_ptr<CTexture> texture = nullptr;
+std::shared_ptr<CTexture> texture1 = nullptr;
 int window_width = WIDTH;
 int window_height = HEIGHT;
 int map_width = WIDTH;
@@ -135,12 +136,14 @@ int main(int argc, char* argv[])
    shader_line = std::make_shared<CShader>("data/shaders/line.vert", "data/shaders/line.frag");
 
    texture = GetOrCreateTexture("logo_icon.png");
+   texture1 = GetOrCreateTexture("logo_icon.png");
+   printf("map %ld avail %ld\n", CTexture::TextureMap.size(), CTexture::AvailableTextures.size());
 
    // set frame rate to 60 Hz
    using framerate = std::chrono::duration<double, std::ratio<1, 60>>;
    auto frame_time = std::chrono::high_resolution_clock::now() + framerate{1};
 
-   map.Open(false, "", true, "data");
+   map.Open(false, "127.0.0.1", true, "data");
    map.SetCoverageRadiusScaleFactor(1.0f);
    map.SetMapCenter(38.93916666, -77.46);
    map.SetMapRotation(0.0f);

@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include "Shader.h"
 #include "Cache.h"
+#include "Texture.h"
 
 #define OSM_IMAGE_CACHE_SIZE 1024
 #define OSM_TILE_SIZE        256
@@ -55,12 +56,13 @@ private:
 
    struct TTile
    {
-      //CVOsmMapTile* Texture;
-      double        Latitude;
-      double        Longitude;
-      int           ZoomLevel;
-      int           TileX;
-      int           TileY;
+      std::shared_ptr<CTexture> Texture;
+      std::string               Filename;
+      double                    Latitude;
+      double                    Longitude;
+      int                       ZoomLevel;
+      int                       TileX;
+      int                       TileY;
    };
 
    struct TCacheTag
@@ -88,8 +90,6 @@ private:
                     std::vector<TTile>& DisplayListScratchpad,
                     std::vector<TTile>& DisplayListTrashScratchpad,
                     TImageCache&        ImageCache);
-
-   //void CreateNoDataTile();
 
    void EnableCache(bool Enable, const char* CachePath = nullptr);
 
@@ -129,6 +129,8 @@ private:
    double                   mMapScaleY;
    double                   mMapBrightness;
    double                   mMapRotation;
+   double                   mDegPerPixNs;
+   double                   mDegPerPixEw;
    double                   mMetersPerPixNs;
    double                   mMetersPerPixEw;
    float                    mMapScaleFactor;

@@ -7,9 +7,11 @@
 #include "OpenStreetMap.h"
 #include "GlLineStrip.h"
 #include "GlRect.h"
+#include "ExecApi.h"
 
 const double EQUATOR_CIRCUMFERENCE_M = 40075017.0;
 const double DEGREES_TO_RADIANS      = M_PI / 180.0;
+const double M_TO_DEG                = 1.0 / 111120.0;
 
 COpenStreetMap::COpenStreetMap()
    : mShaderRect(nullptr),
@@ -22,6 +24,8 @@ COpenStreetMap::COpenStreetMap()
      mMapScaleY(1.0),
      mMapBrightness(0.0),
      mMapRotation(0.0),
+     mDegPerPixNs(0.0),
+     mDegPerPixEw(0.0),
      mMetersPerPixNs(0.0),
      mMetersPerPixEw(0.0),
      mMapScaleFactor(1.0f),
@@ -62,12 +66,6 @@ void COpenStreetMap::Close()
       }
    }
    mDisplayListTrash.clear();
-
-   if (mNoDataTile.Texture)
-   {
-      delete mNoDataTile.Texture;
-      mNoDataTile.Texture = nullptr;
-   }
 #endif
 }
 
@@ -302,8 +300,6 @@ void COpenStreetMap::UpdateCache(TTileList&          TileList,
             tile.TileX     = TileList[i].X;
             tile.TileY     = TileList[i].Y;
 
-            //tile.Texture->SetAlpha(0.5f);
-
             // check if the image cache is full
             if (ImageCache.IsFull())
             {
@@ -328,71 +324,21 @@ void COpenStreetMap::UpdateCache(TTileList&          TileList,
             double br_lat = GetLatitudeFromTileY(TileList[i].Y+1, TileList[i].Zoom);
             double br_lon = GetLongitudeFromTileX(TileList[i].X+1, TileList[i].Zoom);
 
-            //if (!mNoDataTile.Texture)
-               //CreateNoDataTile();
-
             // could not get the image from the OpenStreetMap server or local cache
-            //tile.Texture   = mNoDataTile.Texture;
+            tile.Texture   = nullptr;
+            tile.Filename  = "no_data.png";
             tile.Latitude  = (ul_lat + br_lat) / 2.0;
             tile.Longitude = (ul_lon + br_lon) / 2.0;
             tile.ZoomLevel = TileList[i].Zoom;
             tile.TileX     = TileList[i].X;
             tile.TileY     = TileList[i].Y;
-
-            //tile.Texture->SetAlpha(0.5f);
          }
       }
 
       // add the new image to the display list scratchpad
-      //if (tile.Texture)
-      {
-         DisplayListScratchpad.push_back(tile);
-      }
+      DisplayListScratchpad.push_back(tile);
    }
 }
-
-#if 0
-void COpenStreetMap::CreateNoDataTile()
-{
-   if (!mNoDataTile.Texture)
-   {
-      std::vector<unsigned char> png_file_buffer;
-      int                        png_file_size = 0;
-      std::string                png_filename = TOS_DATA_DIRECTORY;
-
-      png_filename += "tos/no_data.png";
-
-      // open the file
-      std::ifstream png_file(png_filename, std::ios::in | std::ios::binary | std::ios::ate);
-
-      // if open then try to read the file
-      if (png_file.is_open()) 
-      {
-         if ((png_file_size = png_file.tellg()) > 0)
-         {
-            png_file_buffer.resize(png_file_size);
-            png_file.seekg(0, std::ios::beg);
-            png_file.read((char*) &png_file_buffer[0], png_file_size);
-         }
-
-         // check that the png file was retrieved
-         if (png_file_buffer.size() > 0)
-         {
-            // extract the rgb image from the png file
-            CVPngFile png_file(&png_file_buffer[0], png_file_buffer.size());
-
-            if (png_file.Image())
-            {
-               // allocate a new image
-               mNoDataTile.Texture = new COpenStreetMap((COpenStreetMap::TImagePtr) png_file.Image(), "", OSM_TILE_SIZE, OSM_TILE_SIZE);
-            }
-         }
-
-         png_file.close();
-      }
-   }
-}
-#endif
 
 void COpenStreetMap::Draw()
 {
@@ -412,48 +358,25 @@ void COpenStreetMap::Draw()
    {
       // calculate the image offset in pixels from the map center of rotation
       // for the center tile
-      //center_tile_pixels_x = (mDisplayList[0].Longitude - mMapCenterLon) / mRpfDegPerPixEw;
-      //center_tile_pixels_y = (mDisplayList[0].Latitude - mMapCenterLat) / mRpfDegPerPixNs;
+      center_tile_pixels_x = (mDisplayList[0].Longitude - mMapCenterLon) / mDegPerPixEw;
+      center_tile_pixels_y = (mDisplayList[0].Latitude - mMapCenterLat) / mDegPerPixNs;
       center_tile_x        = mDisplayList[0].TileX;
       center_tile_y        = mDisplayList[0].TileY;
    }
 
    // loop through the display list
-   for (int i = 0; i < mDisplayList.size(); i++)
+   for (auto& tile : mDisplayList)
    {
-      //if (!mDisplayList[i].Texture)
-      //   continue;
+      if (!tile.Texture)
+      {
+         tile.Texture = GetOrCreateTexture(tile.Filename.c_str());
+      }
 
-      //// create the image if needed
-      //if (!mDisplayList[i].Texture->IsCreated()) mDisplayList[i].Texture->Create();
-
-      if (mDisplayList[i].ZoomLevel != mZoomLevel)
+      if (tile.ZoomLevel != mZoomLevel)
          continue;
 
-      offset_pixels_x = (mDisplayList[i].TileX - mDisplayList[0].TileX) * OSM_TILE_SIZE * mMapScaleX;
-      offset_pixels_y = -(mDisplayList[i].TileY - mDisplayList[0].TileY) * OSM_TILE_SIZE * mMapScaleY;
-
-#if 0
-      // set the image brightness
-      mDisplayList[i].Texture->SetBrightness(mMapBrightness);
-
-      mDisplayList[i].Texture->EnableDebug(mDrawSubframeBoundaries);
-
-      QMatrix4x4 model;
-      model.setToIdentity();
-
-      // perform the rotation
-      model.rotate(-mMapRotation, 0, 0, 1.0);
-
-      model.translate(center_tile_pixels_x + offset_pixels_x, center_tile_pixels_y + offset_pixels_y);
-      model.scale(mMapScaleX, mMapScaleY);
-
-      mDisplayList[i].Texture->SetModelMatrix(model);
-      mDisplayList[i].Texture->SetProjectionMatrix(MapProjection);
-
-      // draw the tile
-      mDisplayList[i].Texture->Draw();
-#endif
+      offset_pixels_x = (tile.TileX - center_tile_x) * OSM_TILE_SIZE * mMapScaleX;
+      offset_pixels_y = -(tile.TileY - center_tile_y) * OSM_TILE_SIZE * mMapScaleY;
 
       glm::mat4 model(1.0f);
 
@@ -462,6 +385,13 @@ void COpenStreetMap::Draw()
                                               center_tile_pixels_y + offset_pixels_y,
                                               0.0f));
       model = glm::scale(model, glm::vec3(mMapScaleX, mMapScaleY, 0.0f));
+
+      CGlRect tile_rect = CGlRect(mShaderRect, 0.0f, 0.0f, (float)OSM_TILE_SIZE, (float)OSM_TILE_SIZE);
+
+      tile_rect.SetModelMatrix(model);
+      tile_rect.SetTexture(tile.Texture);
+      tile_rect.SetColor(glm::vec4(1.0f));
+      tile_rect.Render(mMapProjection);
 
       // draw the subframe boundary
       if (mDrawSubframeBoundaries)
@@ -489,18 +419,9 @@ void COpenStreetMap::Draw()
       }
    }
 
-#if 0
    // Delete any tiles that have been evicted from the cache
-   for (int i = 0; i < mDisplayListTrash.size(); i++)
-   {
-      if (mDisplayListTrash[i].Texture)
-      {
-         mDisplayListTrash[i].Texture->Delete();
-         delete mDisplayListTrash[i].Texture;
-      }
-   }
+   // TODO: Delete/remove textures from TextureMap and AvailableTextures
    mDisplayListTrash.clear();
-#endif
 
    // release the mutex
    mMutex.unlock();
@@ -953,4 +874,7 @@ void COpenStreetMap::Update()
    // get the meters per pixel in the east-west and north-south directions
    mMetersPerPixEw = GetMetersPerPixelEw(mMapCenterLat, mZoomLevel);
    mMetersPerPixNs = GetMetersPerPixelNs(mZoomLevel);
+
+   mDegPerPixEw = mMetersPerPixEw * M_TO_DEG;
+   mDegPerPixNs = mMetersPerPixNs * M_TO_DEG;
 }
