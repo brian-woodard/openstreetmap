@@ -41,7 +41,7 @@ float rect[4] = { 50.0f, 50.0f, 250.0f, 250.0f };
 void render()
 {
    CGlLineStrip           lines = CGlLineStrip(shader_line, 0.0f, 0.0f, 0.0f, 0.0f);
-   CGlRect                rect = CGlRect(shader_rect, 50.0f, 50.0f, 100.0f, 100.0f);
+   CGlRect                rect = CGlRect(shader_rect, 0.0f, 0.0f, 100.0f, 100.0f);
    std::vector<glm::vec3> points;
    glm::mat4              mvp;
 
@@ -50,11 +50,11 @@ void render()
                     -(float)window_height * 0.5f,
                      (float)window_height * 0.5f, -1.0f, 1.0f);
 
-   points.push_back(glm::vec3(0.0f, 0.0f, 0.0f));
-   points.push_back(glm::vec3(100.0f, 0.0f, 0.0f));
-   points.push_back(glm::vec3(100.0f, 100.0f, 0.0f));
-   points.push_back(glm::vec3(200.0f, 100.0f, 0.0f));
-   points.push_back(glm::vec3(200.0f, 200.0f, 0.0f));
+   points.push_back(glm::vec3(-50.0f, -50.0f, 0.0f));
+   points.push_back(glm::vec3( 50.0f, -50.0f, 0.0f));
+   points.push_back(glm::vec3( 50.0f,  50.0f, 0.0f));
+   points.push_back(glm::vec3(-50.0f,  50.0f, 0.0f));
+   points.push_back(glm::vec3(-50.0f, -50.0f, 0.0f));
 
    map.SetProjection(mvp);
    map.SetMapRotation(map_rotation);
