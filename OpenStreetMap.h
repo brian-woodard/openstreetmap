@@ -5,6 +5,9 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <memory>
+#include <glm/glm.hpp>
+#include "Shader.h"
 
 #define OSM_IMAGE_CACHE_SIZE 1024
 #define OSM_TILE_SIZE        256
@@ -36,6 +39,14 @@ public:
    void SetMapScaleFactor(float ScaleFactor);
 
    void SetMapSize(int MapWidthPix, int MapHeightPix);
+
+   void SetProjection(const glm::mat4& Projection) { mMapProjection = Projection; }
+
+   void SetShaders(std::shared_ptr<CShader> ShaderRect, std::shared_ptr<CShader> ShaderLine)
+   {
+      mShaderRect = ShaderRect;
+      mShaderLine = ShaderLine;
+   }
 
    void Update();
 
@@ -101,32 +112,35 @@ private:
    void GetZoom();
 
    //CVOsmIf            mWmtsIf;
-   std::thread        mCoverageThread;
-   std::mutex         mMutex;
-   std::vector<TTile> mDisplayList;
-   std::vector<TTile> mDisplayListTrash;
-   std::string        mCachePath;
-   std::string        mWmtsUrl;
-   TTile              mNoDataTile;
-   double             mMapCenterLat;
-   double             mMapCenterLon;
-   double             mMapZoom;
-   double             mMapScaleX;
-   double             mMapScaleY;
-   double             mMapBrightness;
-   double             mMapRotation;
-   double             mMetersPerPixNs;
-   double             mMetersPerPixEw;
-   float              mMapScaleFactor;
-   float              mCoverageRadiusScaleFactor;
-   int                mMapWidthPix;
-   int                mMapHeightPix;
-   int                mZoomLevel;
-   int                mWmtsTimeout;
-   bool               mTerminateCoverageThread;
-   bool               mDrawSubframeBoundaries;
-   bool               mCacheEnabled;
-   bool               mWmtsEnabled;
-   bool               mWmtsOnline;
-   bool               mDrawUpdate;
+   std::thread              mCoverageThread;
+   std::mutex               mMutex;
+   std::vector<TTile>       mDisplayList;
+   std::vector<TTile>       mDisplayListTrash;
+   std::string              mCachePath;
+   std::string              mWmtsUrl;
+   glm::mat4                mMapProjection;
+   std::shared_ptr<CShader> mShaderRect;
+   std::shared_ptr<CShader> mShaderLine;
+   TTile                    mNoDataTile;
+   double                   mMapCenterLat;
+   double                   mMapCenterLon;
+   double                   mMapZoom;
+   double                   mMapScaleX;
+   double                   mMapScaleY;
+   double                   mMapBrightness;
+   double                   mMapRotation;
+   double                   mMetersPerPixNs;
+   double                   mMetersPerPixEw;
+   float                    mMapScaleFactor;
+   float                    mCoverageRadiusScaleFactor;
+   int                      mMapWidthPix;
+   int                      mMapHeightPix;
+   int                      mZoomLevel;
+   int                      mWmtsTimeout;
+   bool                     mTerminateCoverageThread;
+   bool                     mDrawSubframeBoundaries;
+   bool                     mCacheEnabled;
+   bool                     mWmtsEnabled;
+   bool                     mWmtsOnline;
+   bool                     mDrawUpdate;
 };

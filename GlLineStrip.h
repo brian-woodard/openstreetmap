@@ -22,6 +22,8 @@ public:
    void SetColor(const glm::vec4& Color) override;
    void SetLineWidth(float LineWidth) { mLineWidth = LineWidth; }
 
+   void SetRotation(float Rotation);
+
    void SetVertices(std::vector<glm::vec3>* Vertices);
 
 private:
@@ -31,6 +33,7 @@ private:
    static unsigned int mVBO;            // Vertex Buffer Object
    glm::vec4 mColor;
    float mLineWidth;
+   float mRotationRadians;
    std::vector<glm::vec3>* mVertices;
    bool mAllowMultipleDrawCalls;
 
