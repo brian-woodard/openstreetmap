@@ -12,6 +12,8 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 #include "GlDebug.h"
+#include "GlLineStrip.h"
+#include "GlRect.h"
 #include "Shader.h"
 #include "Texture.h"
 #include "OpenStreetMap.h"
@@ -19,21 +21,13 @@
 #define WIDTH  640
 #define HEIGHT 480
 
-bool initialize_buffers = true;
-GLuint vao;
-GLuint vbo;
-GLuint ebo;
-GLuint program;
-glm::vec4 color_ul = glm::vec4(1.0f);
-glm::vec4 color_ur = glm::vec4(1.0f);
-glm::vec4 color_lr = glm::vec4(1.0f);
-glm::vec4 color_ll = glm::vec4(1.0f);
 std::shared_ptr<CShader> shader_rect = nullptr;
 std::shared_ptr<CShader> shader_line = nullptr;
 std::shared_ptr<CTexture> texture = nullptr;
 int window_width = WIDTH;
 int window_height = HEIGHT;
 COpenStreetMap map;
+float map_rotation = 0.0f;
 
 void resize(GLFWwindow* window, int width, int height)
 {
@@ -46,60 +40,34 @@ float rect[4] = { 50.0f, 50.0f, 250.0f, 250.0f };
 
 void render()
 {
-   //float vertices[4][9] =
-   //{
-   //     // aPos                 // aColor                                       // aTexCoord
-   //   { rect[0], rect[1], 0.0f, color_ul.r, color_ul.g, color_ul.b, color_ul.a, 0.0f, 1.0f },
-   //   { rect[2], rect[1], 0.0f, color_ur.r, color_ur.g, color_ur.b, color_ur.a, 1.0f, 1.0f },
-   //   { rect[2], rect[3], 0.0f, color_lr.r, color_lr.g, color_lr.b, color_lr.a, 1.0f, 0.0f },
-   //   { rect[0], rect[3], 0.0f, color_ll.r, color_ll.g, color_ll.b, color_ll.a, 0.0f, 0.0f },
-   //};
+   CGlLineStrip           lines = CGlLineStrip(shader_line, 0.0f, 0.0f, 0.0f, 0.0f);
+   CGlRect                rect = CGlRect(shader_rect, 50.0f, 50.0f, 100.0f, 100.0f);
+   std::vector<glm::vec3> points;
+   glm::mat4              mvp;
 
-   //if (initialize_buffers)
-   //{
-   //   GLuint indices[6] =
-   //   {
-   //      0, 1, 2,
-   //      0, 2, 3,
-   //   };
+   mvp = glm::ortho(-(float)window_width * 0.5f,
+                     (float)window_width * 0.5f,
+                    -(float)window_height * 0.5f,
+                     (float)window_height * 0.5f, -1.0f, 1.0f);
 
-   //   printf("Initialize buffers, program %d\n", program);
-   //   GLCALL(glGenVertexArrays(1, &vao));
-   //   GLCALL(glGenBuffers(1, &vbo));
-   //   GLCALL(glGenBuffers(1, &ebo));
+   points.push_back(glm::vec3(0.0f, 0.0f, 0.0f));
+   points.push_back(glm::vec3(100.0f, 0.0f, 0.0f));
+   points.push_back(glm::vec3(100.0f, 100.0f, 0.0f));
+   points.push_back(glm::vec3(200.0f, 100.0f, 0.0f));
+   points.push_back(glm::vec3(200.0f, 200.0f, 0.0f));
 
-   //   GLCALL(glBindVertexArray(vao));
-   //   GLCALL(glBindBuffer(GL_ARRAY_BUFFER, vbo));
-   //   GLCALL(glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW));
-   //   GLCALL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo));
-   //   GLCALL(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW));
-   //   GLCALL(glEnableVertexAttribArray(0));
-   //   GLCALL(glVertexAttribPointer(0, 3, GL_FLOAT, false, 9 * sizeof(float), (void*)0));
-   //   GLCALL(glEnableVertexAttribArray(1));
-   //   GLCALL(glVertexAttribPointer(1, 4, GL_FLOAT, false, 9 * sizeof(float), (void*)(3 * sizeof(float))));
-   //   GLCALL(glEnableVertexAttribArray(2));
-   //   GLCALL(glVertexAttribPointer(2, 2, GL_FLOAT, false, 9 * sizeof(float), (void*)(7 * sizeof(float))));
-
-   //   initialize_buffers = false;
-   //}
-
-   //GLCALL(glUseProgram(program));
-   //int mvp_loc;
-   //GLCALL(mvp_loc = glGetUniformLocation(program, "mvp"));
-   //glm::mat4 mvp = glm::ortho(0.0f, (float)window_width, (float)window_height, 0.0f, -1.0f, 1.0f);
-   //GLCALL(glUniformMatrix4fv(mvp_loc, 1, GL_FALSE, &mvp[0][0]));
-
+   map.SetProjection(mvp);
+   map.SetMapRotation(map_rotation);
    map.Update();
    map.Draw();
 
-   //if (texture && texture->GetTexture())
-   //{
-   //   GLCALL(glBindTexture(GL_TEXTURE_2D, texture->GetTexture()));
-   //}
+   rect.SetColor(glm::vec4(1.0f));
+   rect.SetTexture(texture);
+   rect.Render(mvp);
 
-   //GLCALL(glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices));
-
-   //GLCALL(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr));
+   lines.SetColor(glm::vec4(1.0f));
+   lines.SetVertices(&points);
+   lines.Render(mvp);
 }
 
 int main(int argc, char* argv[])
@@ -149,7 +117,7 @@ int main(int argc, char* argv[])
    glfwShowWindow(window);
 
    // Initialize opengl
-   GLCALL(glClearColor(0.5, 0.5, 0.5, 1.0));
+   GLCALL(glClearColor(0.5f, 0.5f, 0.5f, 1.0f));
 
    // enable blending
    GLCALL(glEnable(GL_BLEND));
@@ -173,6 +141,8 @@ int main(int argc, char* argv[])
    map.SetMapRotation(0.0f);
    map.SetMapScaleFactor(10000000.0f);
    map.SetMapSize(WIDTH, HEIGHT);
+   map.SetShaders(shader_rect, shader_line);
+   map.EnableSubframeBoundaries(true);
 
    while (window)
    {
@@ -197,16 +167,9 @@ int main(int argc, char* argv[])
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
 
-      //ImGui::Begin("Debug");
-      //ImGui::SliderFloat("Rect X1", &rect[0], 10.0f, 300.0f);
-      //ImGui::SliderFloat("Rect X2", &rect[2], 10.0f, 500.0f);
-      //ImGui::SliderFloat("Rect Y1", &rect[1], 10.0f, 300.0f);
-      //ImGui::SliderFloat("Rect Y2", &rect[3], 10.0f, 500.0f);
-      //ImGui::ColorEdit4("Upper Left", &color_ul.r);
-      //ImGui::ColorEdit4("Upper Right", &color_ur.r);
-      //ImGui::ColorEdit4("Lower Right", &color_lr.r);
-      //ImGui::ColorEdit4("Lower Left", &color_ll.r);
-      //ImGui::End();
+      ImGui::Begin("Debug");
+      ImGui::SliderFloat("Map Rotation", &map_rotation, -180.0f, 180.0f);
+      ImGui::End();
 
       // Render ImGui
       ImGui::Render();

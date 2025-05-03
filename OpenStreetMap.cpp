@@ -4,12 +4,16 @@
 #include <cstring>
 #include <fstream>
 #include "OpenStreetMap.h"
+#include "GlLineStrip.h"
+#include "GlRect.h"
 
 const double EQUATOR_CIRCUMFERENCE_M = 40075017.0;
 const double DEGREES_TO_RADIANS      = M_PI / 180.0;
 
 COpenStreetMap::COpenStreetMap()
-   : mNoDataTile{},
+   : mShaderRect(nullptr),
+     mShaderLine(nullptr),
+     mNoDataTile{},
      mMapCenterLat(0.0),
      mMapCenterLon(0.0),
      mMapZoom(1.0),
@@ -487,55 +491,53 @@ void COpenStreetMap::Draw()
    // release the mutex
    mMutex.unlock();
 
-#if 0
-   if (mDrawSubframeBoundaries && LineProgram)
+   if (mDrawSubframeBoundaries)
    {
       // draw viewport
-      CGLLineStrip viewport(5);
+      std::vector<glm::vec3> points;
+      CGlLineStrip           viewport = CGlLineStrip(mShaderLine, 0.0f, 0.0f, 0.0f, 0.0f);
+      CGlRect                rect = CGlRect(mShaderRect, 0.0f, 0.0f, mMapWidthPix, mMapHeightPix);
 
-      viewport.AddPoint(-mMapWidthPix/2, -mMapHeightPix/2);
-      viewport.AddPoint(-mMapWidthPix/2,  mMapHeightPix/2);
-      viewport.AddPoint( mMapWidthPix/2,  mMapHeightPix/2);
-      viewport.AddPoint( mMapWidthPix/2, -mMapHeightPix/2);
-      viewport.AddPoint(-mMapWidthPix/2, -mMapHeightPix/2);
+      points.push_back(glm::vec3(-(float)mMapWidthPix * 0.5f, -(float)mMapHeightPix * 0.5f, 0.0f));
+      points.push_back(glm::vec3(-(float)mMapWidthPix * 0.5f,  (float)mMapHeightPix * 0.5f, 0.0f));
+      points.push_back(glm::vec3( (float)mMapWidthPix * 0.5f,  (float)mMapHeightPix * 0.5f, 0.0f));
+      points.push_back(glm::vec3( (float)mMapWidthPix * 0.5f, -(float)mMapHeightPix * 0.5f, 0.0f));
+      points.push_back(glm::vec3(-(float)mMapWidthPix * 0.5f, -(float)mMapHeightPix * 0.5f, 0.0f));
 
       viewport.SetLineWidth(3.0f);
-      viewport.SetColor(QVector4D(1.0f, 1.0f, 0.0f, 1.0f));
-      viewport.SetProjectionMatrix(MapProjection);
-      viewport.Draw();
+      viewport.SetColor(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
+      viewport.SetVertices(&points);
+      viewport.Render(mMapProjection);
    
-      CGLRectangle rect(-mMapWidthPix/2, -mMapHeightPix/2, mMapWidthPix/2, mMapHeightPix/2);
-      rect.SetColor(QVector4D(1.0f, 1.0f, 0.0f, 0.2f));
-      rect.SetProjectionMatrix(MapProjection);
-      rect.Draw();
+      rect.SetColor(glm::vec4(1.0f, 1.0f, 0.0f, 0.2f));
+      rect.Render(mMapProjection);
 
       // draw coverage area
-      CGLLineStrip coverage(5);
-      double       coverage_radial_x;
-      double       coverage_radial_y;
-      double       coverage_radius_pixels;
+      CGlLineStrip coverage = CGlLineStrip(mShaderLine, 0.0f, 0.0f, 0.0f, 0.0f);
+      float        coverage_radial_x;
+      float        coverage_radial_y;
+      float        coverage_radius_pixels;
 
-      coverage_radial_x = ((double)mMapWidthPix / 2.0) * mCoverageRadiusScaleFactor;
-      coverage_radial_y = ((double)mMapHeightPix / 2.0) * mCoverageRadiusScaleFactor;
+      coverage_radial_x = ((float)mMapWidthPix * 0.5f) * mCoverageRadiusScaleFactor;
+      coverage_radial_y = ((float)mMapHeightPix * 0.5f) * mCoverageRadiusScaleFactor;
 
       coverage_radius_pixels = sqrt(
             (coverage_radial_x * coverage_radial_x) +
             (coverage_radial_y * coverage_radial_y));
 
-      coverage.AddPoint(-coverage_radius_pixels, -coverage_radius_pixels);
-      coverage.AddPoint(-coverage_radius_pixels,  coverage_radius_pixels);
-      coverage.AddPoint( coverage_radius_pixels,  coverage_radius_pixels);
-      coverage.AddPoint( coverage_radius_pixels, -coverage_radius_pixels);
-      coverage.AddPoint(-coverage_radius_pixels, -coverage_radius_pixels);
+      points.clear();
+      points.push_back(glm::vec3(-coverage_radius_pixels, -coverage_radius_pixels, 0.0f));
+      points.push_back(glm::vec3(-coverage_radius_pixels,  coverage_radius_pixels, 0.0f));
+      points.push_back(glm::vec3( coverage_radius_pixels,  coverage_radius_pixels, 0.0f));
+      points.push_back(glm::vec3( coverage_radius_pixels, -coverage_radius_pixels, 0.0f));
+      points.push_back(glm::vec3(-coverage_radius_pixels, -coverage_radius_pixels, 0.0f));
 
       coverage.SetLineWidth(3.0f);
-      coverage.SetColor(QVector4D(1.0f, 1.0f, 0.0f, 1.0f));
-      coverage.Rotate(-mMapRotation);
-      coverage.SetProjectionMatrix(MapProjection);
-
-      coverage.Draw();
+      coverage.SetColor(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
+      coverage.SetVertices(&points);
+      coverage.SetRotation(-mMapRotation * DEGREES_TO_RADIANS);
+      coverage.Render(mMapProjection);
    }
-#endif
 }
 
 void COpenStreetMap::EnableCache(bool Enable, const char* CachePath)
