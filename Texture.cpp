@@ -22,8 +22,6 @@ CTexture::CTexture(const char* Filename)
    stbi_set_flip_vertically_on_load(1);
    unsigned char* data = stbi_load(mFilename.c_str(), &mWidth, &mHeight, &mChannels, 0);
 
-   printf("Loaded texture %s (%d, %d) channels %d\n", mFilename.c_str(), mWidth, mHeight, mChannels);
-
    if (!data)
    {
       printf("Failed to load texture: %s\n", mFilename.c_str());
@@ -32,6 +30,8 @@ CTexture::CTexture(const char* Filename)
 
    glGenTextures(1, &mTextureId);
    glBindTexture(GL_TEXTURE_2D, mTextureId);
+
+   printf("Loaded texture %d %s (%d, %d) channels %d\n", mTextureId, mFilename.c_str(), mWidth, mHeight, mChannels);
 
    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -63,6 +63,7 @@ CTexture::CTexture(const char* Filename)
 
 CTexture::~CTexture()
 {
+   printf("Delete texture %d\n", mTextureId);
    DeleteTexture();
 }
 
