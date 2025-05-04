@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstring>
 #include <fstream>
+#include <filesystem>
 #include <glm/gtc/matrix_transform.hpp>
 #include "OpenStreetMap.h"
 #include "GlLineStrip.h"
@@ -200,12 +201,17 @@ void COpenStreetMap::UpdateCache(TTileList&          TileList,
                                  std::vector<TTile>& DisplayListTrashScratchpad,
                                  TImageCache&        ImageCache)
 {
-   TTile                      tile;
-   TTile                      trash_tile;
-   std::vector<unsigned char> png_file_buffer;
-   std::string                png_filename;
-   int                        png_file_size;
-   bool                       result;
+   TTile       tile;
+   TTile       trash_tile;
+   std::string png_filename;
+   bool        got_file = false;
+
+   static int prev_size = 0;
+   if (ImageCache.Size() != prev_size)
+   {
+      prev_size = ImageCache.Size();
+      ExecApiLogMessage("Cache size %d", prev_size);
+   }
 
    // loop over the subframe coverage list
    for (int i = 0; i < TileList.size(); i++)
@@ -215,124 +221,91 @@ void COpenStreetMap::UpdateCache(TTileList&          TileList,
 
       if (!ImageCache.Get(tile, TileList[i]))
       {
-         // resize the png file buffer to 0
-         png_file_buffer.resize(0);
-
          // check if map source includes the local disk
          if (mCacheEnabled)
          {
+            std::error_code err;
+
             // construct the file name
             png_filename = ConstructFilename(TileList[i].Zoom,
                                              TileList[i].X,
                                              TileList[i].Y);
 
-            // open the file
-            std::ifstream png_file(png_filename, std::ios::in | std::ios::binary | std::ios::ate);
-
-            // if open then try to read the file
-            if (png_file.is_open()) 
-            {
-               if ((png_file_size = png_file.tellg()) > 0)
-               {
-                  png_file_buffer.resize(png_file_size);
-                  png_file.seekg(0, std::ios::beg);
-                  png_file.read((char*) &png_file_buffer[0], png_file_size);
-               }
-            }
+            got_file = std::filesystem::exists(png_filename);
          }
 
          // check if map source includes the WMTS server and nothing has
          // been read in from the local png file
-         if (mWmtsOnline && mWmtsEnabled && png_file_buffer.size() == 0)
+         if (mWmtsOnline && mWmtsEnabled && !got_file)
          {
-            // get the png file from the Osm server
-            //result = mWmtsIf.GetMapPng(png_file_buffer,
-            //                           TileList[i].Zoom,
-            //                           TileList[i].X,
-            //                           TileList[i].Y);
-            result = false;
+            unsigned char* buffer;
+            int            size;
 
-            if (result)
+            // get the png file from the WMTS server
+            got_file = mWmtsIf.GetMapPngBuffer(TileList[i].Zoom,
+                                              TileList[i].X,
+                                              TileList[i].Y,
+                                              &buffer,
+                                              size);
+
+            if (got_file)
             {
                // write the buffer out to a new png file if map source
                // includes the local png file
-               if ((png_file_buffer.size() > 0) && mCacheEnabled)
+               if (mCacheEnabled)
                {
-//TODO: Use std::filesystem
-//#ifdef LINUX
-//                  mkdir(mCachePath.c_str(), 0775);
-//#else
-//                  mkdir(mCachePath.c_str());
-//#endif
+                  std::error_code err;
+                  std::filesystem::create_directory(mCachePath, err);
 
                   std::ofstream png_file(png_filename, std::ios::out | std::ios::binary | std::ios::trunc);
 
-                  png_file.write((char*) &png_file_buffer[0], png_file_buffer.size());
+                  png_file.write((char*)buffer, size);
                }
             }
             else
             {
                // bad png file from the tile server
-               png_file_buffer.resize(0);
                mWmtsOnline = false;
                mWmtsTimeout = SERVER_TIMEOUT;
             }
          }
 
+         double ul_lat = GetLatitudeFromTileY(TileList[i].Y, TileList[i].Zoom);
+         double ul_lon = GetLongitudeFromTileX(TileList[i].X, TileList[i].Zoom);
+         double br_lat = GetLatitudeFromTileY(TileList[i].Y+1, TileList[i].Zoom);
+         double br_lon = GetLongitudeFromTileX(TileList[i].X+1, TileList[i].Zoom);
+
+         // allocate a new image
+         tile.Texture   = nullptr;
+         tile.Latitude  = (ul_lat + br_lat) / 2.0;
+         tile.Longitude = (ul_lon + br_lon) / 2.0;
+         tile.ZoomLevel = TileList[i].Zoom;
+         tile.TileX     = TileList[i].X;
+         tile.TileY     = TileList[i].Y;
+
          // check that the png file was retrieved
-         if (png_file_buffer.size() > 0)
+         if (got_file)
          {
-            // extract the rgb image from the png file
-            //CVPngFile png_file(&png_file_buffer[0], png_file_buffer.size());
-
-            //if (png_file.Image() == nullptr) continue;
-
-            double ul_lat = GetLatitudeFromTileY(TileList[i].Y, TileList[i].Zoom);
-            double ul_lon = GetLongitudeFromTileX(TileList[i].X, TileList[i].Zoom);
-            double br_lat = GetLatitudeFromTileY(TileList[i].Y+1, TileList[i].Zoom);
-            double br_lon = GetLongitudeFromTileX(TileList[i].X+1, TileList[i].Zoom);
-
-            // allocate a new image
-            //tile.Texture   = new COpenStreetMap((COpenStreetMap::TImagePtr) png_file.Image(), png_filename.c_str(), OSM_TILE_SIZE, OSM_TILE_SIZE);
-            tile.Latitude  = (ul_lat + br_lat) / 2.0;
-            tile.Longitude = (ul_lon + br_lon) / 2.0;
-            tile.ZoomLevel = TileList[i].Zoom;
-            tile.TileX     = TileList[i].X;
-            tile.TileY     = TileList[i].Y;
-
-            // check if the image cache is full
-            if (ImageCache.IsFull())
-            {
-               // remove the oldest image from the cache
-               ImageCache.GetBack(trash_tile);
-
-               //if (trash_tile.Texture != mNoDataTile.Texture)
-               //{
-               //   // move the old image onto the display list trash
-               //   // scratchpad
-               //   DisplayListTrashScratchpad.push_back(trash_tile);
-               //}
-            }
-
-            // put the new image onto the cache
-            ImageCache.PutFront(tile, TileList[i]);
+            tile.Filename  = png_filename;
          }
          else
          {
-            double ul_lat = GetLatitudeFromTileY(TileList[i].Y, TileList[i].Zoom);
-            double ul_lon = GetLongitudeFromTileX(TileList[i].X, TileList[i].Zoom);
-            double br_lat = GetLatitudeFromTileY(TileList[i].Y+1, TileList[i].Zoom);
-            double br_lon = GetLongitudeFromTileX(TileList[i].X+1, TileList[i].Zoom);
-
-            // could not get the image from the OpenStreetMap server or local cache
-            tile.Texture   = nullptr;
             tile.Filename  = "no_data.png";
-            tile.Latitude  = (ul_lat + br_lat) / 2.0;
-            tile.Longitude = (ul_lon + br_lon) / 2.0;
-            tile.ZoomLevel = TileList[i].Zoom;
-            tile.TileX     = TileList[i].X;
-            tile.TileY     = TileList[i].Y;
          }
+
+         // check if the image cache is full
+         if (ImageCache.IsFull())
+         {
+            // remove the oldest image from the cache
+            ImageCache.GetBack(trash_tile);
+
+            // move the old image onto the display list trash
+            // scratchpad
+            DisplayListTrashScratchpad.push_back(trash_tile);
+         }
+
+         // put the new image onto the cache
+         ImageCache.PutFront(tile, TileList[i]);
       }
 
       // add the new image to the display list scratchpad
@@ -374,6 +347,9 @@ void COpenStreetMap::Draw()
 
       if (tile.ZoomLevel != mZoomLevel)
          continue;
+
+      mMapScaleX = mMapZoom;
+      mMapScaleY = mMapZoom;
 
       offset_pixels_x = (tile.TileX - center_tile_x) * OSM_TILE_SIZE * mMapScaleX;
       offset_pixels_y = -(tile.TileY - center_tile_y) * OSM_TILE_SIZE * mMapScaleY;
@@ -802,15 +778,17 @@ bool COpenStreetMap::Open(bool        WmtsEnabled,
    // Open the WMTS interface
    if (mWmtsEnabled)
    {
-      std::vector<unsigned char> capabilities_buffer;
-      std::string                capabilities_filename;
+      std::string    capabilities_filename;
+      unsigned char* buffer;
+      int            size;
+      bool           got_capabilities = false;
 
-      //// Get the wmts capabilities
-      //if (mWtmsIf.Open(mWmtsUrl, 1))
-      //   mWmtsIf.GetWmtsCapabilitiesXml(capabilities_buffer);
+      // Get the wmts capabilities
+      if (mWmtsIf.Open(mWmtsUrl.c_str(), 10))
+         got_capabilities = mWmtsIf.GetWmtsCapabilitiesXml(&buffer, size);
 
       // write the wms capabilities to the file
-      if (CachePath && capabilities_buffer.size() > 1)
+      if (CachePath && got_capabilities)
       {
          capabilities_filename = CachePath;
          capabilities_filename += "/osm_wmts_capabilities.xml";
@@ -819,12 +797,14 @@ bool COpenStreetMap::Open(bool        WmtsEnabled,
                capabilities_filename,
                std::ios::out | std::ios::binary | std::ios::trunc);
 
-         wmts_capabilities_file.write((char*) &capabilities_buffer[0], capabilities_buffer.size());
+         ExecApiLogWarning("Writing %d from %p", size, buffer);
+         wmts_capabilities_file.write((char*)buffer, size);
 
          mWmtsOnline = true;
       }
       else
       {
+         ExecApiLogWarning("Failed to connect with WMTS server");
          mWmtsTimeout = SERVER_TIMEOUT;
          mWmtsOnline = false;
       }

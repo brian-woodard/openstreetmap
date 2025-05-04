@@ -63,7 +63,6 @@ CTexture::CTexture(const char* Filename)
 
 CTexture::~CTexture()
 {
-   printf("Delete texture %d\n", mTextureId);
    DeleteTexture();
 }
 
@@ -77,6 +76,7 @@ void CTexture::DeleteTexture()
 {
    if (mTextureId)
    {
+      printf("Delete texture %d\n", mTextureId);
       glDeleteTextures(1, &mTextureId);
       mTextureId = 0;
    }

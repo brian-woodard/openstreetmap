@@ -24,13 +24,13 @@
 std::shared_ptr<CShader> shader_rect = nullptr;
 std::shared_ptr<CShader> shader_line = nullptr;
 std::shared_ptr<CTexture> texture = nullptr;
-std::shared_ptr<CTexture> texture1 = nullptr;
 int window_width = WIDTH;
 int window_height = HEIGHT;
 int map_width = WIDTH;
 int map_height = HEIGHT;
 COpenStreetMap map;
 float map_rotation = 0.0f;
+float map_scale_factor = 35000.0f;
 bool draw_boundaries = false;
 
 void resize(GLFWwindow* window, int width, int height)
@@ -62,18 +62,19 @@ void render()
 
    map.SetProjection(mvp);
    map.SetMapRotation(map_rotation);
+   map.SetMapScaleFactor(map_scale_factor);
    map.EnableSubframeBoundaries(draw_boundaries);
    map.SetMapSize(map_width, map_height);
    map.Update();
    map.Draw();
 
-   rect.SetColor(glm::vec4(1.0f));
-   rect.SetTexture(texture);
-   rect.Render(mvp);
+   //rect.SetColor(glm::vec4(1.0f));
+   //rect.SetTexture(texture);
+   //rect.Render(mvp);
 
-   lines.SetColor(glm::vec4(1.0f));
-   lines.SetVertices(&points);
-   lines.Render(mvp);
+   //lines.SetColor(glm::vec4(1.0f));
+   //lines.SetVertices(&points);
+   //lines.Render(mvp);
 }
 
 int main(int argc, char* argv[])
@@ -136,18 +137,15 @@ int main(int argc, char* argv[])
    shader_line = std::make_shared<CShader>("data/shaders/line.vert", "data/shaders/line.frag");
 
    texture = GetOrCreateTexture("logo_icon.png");
-   texture1 = GetOrCreateTexture("logo_icon.png");
-   printf("map %ld avail %ld\n", CTexture::TextureMap.size(), CTexture::AvailableTextures.size());
 
    // set frame rate to 60 Hz
    using framerate = std::chrono::duration<double, std::ratio<1, 60>>;
    auto frame_time = std::chrono::high_resolution_clock::now() + framerate{1};
 
-   map.Open(false, "127.0.0.1", true, "data");
+   map.Open(true, "172.31.99.126:8080", true, "data/map");
    map.SetCoverageRadiusScaleFactor(1.0f);
    map.SetMapCenter(38.93916666, -77.46);
    map.SetMapRotation(0.0f);
-   map.SetMapScaleFactor(10000000.0f);
    map.SetShaders(shader_rect, shader_line);
 
    while (window)
@@ -176,6 +174,7 @@ int main(int argc, char* argv[])
       ImGui::Begin("Debug");
       ImGui::Checkbox("Draw Boundaries", &draw_boundaries);
       ImGui::SliderFloat("Map Rotation", &map_rotation, -180.0f, 180.0f);
+      ImGui::SliderFloat("Map Scale Factor", &map_scale_factor, 35000.0f, 10000000.0f);
       ImGui::SliderInt("Map Width", &map_width, WIDTH, WIDTH * 2);
       ImGui::SliderInt("Map Height", &map_height, HEIGHT, HEIGHT * 2);
       ImGui::End();
