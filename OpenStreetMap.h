@@ -28,6 +28,9 @@ public:
 
    void EnableSubframeBoundaries(bool Enable);
 
+   double GetMapZoom() const { return mMapZoom; }
+   int GetZoomLevel() const { return mZoomLevel; }
+
    bool Open(bool        WmtsEnabled,
              const char* WmtsUrl,
              bool        CacheEnabled,
