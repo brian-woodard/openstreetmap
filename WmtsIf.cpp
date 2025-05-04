@@ -4,10 +4,8 @@
 #include "WmtsIf.h"
 
 CWmtsIf::CWmtsIf()
-   : mCurlBuffer(nullptr),
+   : mCurlBuffer(),
      mWmtsUrl(""),
-     mSize(0),
-     mSizeAllocated(0),
      mTimeoutMsec(500),
      mIsOpen(false)
 {
@@ -18,37 +16,6 @@ CWmtsIf::~CWmtsIf()
    Close();
 }
 
-void CWmtsIf::AppendToBuffer(void* Buffer, size_t Size)
-{
-   if (mCurlBuffer)
-   {
-      if (mSize + Size < mSizeAllocated)
-      {
-         memcpy(&mCurlBuffer[mSize], Buffer, Size);
-         mSize += Size;
-      }
-      else
-      {
-         unsigned char* new_buffer = new unsigned char[mSize + Size];
-         memcpy(new_buffer, mCurlBuffer, mSize);
-         memcpy(&new_buffer[mSize], Buffer, Size);
-         mSize = mSize + Size;
-         mSizeAllocated = mSize;
-
-         delete [] mCurlBuffer;
-
-         mCurlBuffer = new_buffer;
-      }
-   }
-   else
-   {
-      mCurlBuffer = new unsigned char[Size];
-      mSize = Size;
-      mSizeAllocated = Size;
-      memcpy(mCurlBuffer, Buffer, Size);
-   }
-}
-
 void CWmtsIf::Close()
 {
    if (!mIsOpen) return;
@@ -56,22 +23,21 @@ void CWmtsIf::Close()
    // cleanup curl
    curl_global_cleanup();
 
-   if (mCurlBuffer)
-   {
-      delete [] mCurlBuffer;
-      mCurlBuffer = nullptr;
-      mSize = 0;
-   }
-
    mIsOpen = false;
 }
 
 size_t CWmtsIf::CurlWriteFunction(void* Ptr, size_t Size, size_t Nmemb)
 {
-   int data_size = Size * Nmemb;
-
-   AppendToBuffer(Ptr, data_size);
-
+   int            data_size;                                                    
+   unsigned char* data_array;                                                   
+                                                                                
+   // calculate the data size                                                   
+   data_size = Size * Nmemb;                                                    
+                                                                                
+   // insert the data at the end of the buffer                                  
+   data_array = (unsigned char*) Ptr;                                           
+   mCurlBuffer.insert(mCurlBuffer.end(), &data_array[0], &data_array[data_size]);
+                                                                                
    return data_size;
 }
 
@@ -83,7 +49,7 @@ bool CWmtsIf::GetWmtsCapabilitiesXml(unsigned char** XmlFileBuffer, int& Size)
    if (!mIsOpen) return false;
 
    // clear the curl buffer
-   mSize = 0;
+   mCurlBuffer.clear();
 
    // construct the wmts command
    wmts_cmd = mWmtsUrl + "/styles/basic-preview/wmts.xml";
@@ -103,8 +69,8 @@ bool CWmtsIf::GetWmtsCapabilitiesXml(unsigned char** XmlFileBuffer, int& Size)
    curl_easy_perform(curl);
    curl_easy_cleanup(curl);
 
-   *XmlFileBuffer = mCurlBuffer;
-   Size = mSize;
+   *XmlFileBuffer = mCurlBuffer.data();
+   Size = mCurlBuffer.size();
 
    return true;
 }
@@ -121,7 +87,7 @@ bool CWmtsIf::GetMapPngBuffer(int Zoom,
    if (!mIsOpen) return false;
 
    // clear the curl buffer
-   mSize = 0;
+   mCurlBuffer.clear();
 
    // construct the wms command
    wmts_cmd = mWmtsUrl + "/styles/basic-preview/256/" +
@@ -145,7 +111,7 @@ bool CWmtsIf::GetMapPngBuffer(int Zoom,
    curl_easy_cleanup(curl);
 
    // check for png file validity
-   if (mSize == 0)
+   if (mCurlBuffer.size() == 0)
       return false;
 
    if ((mCurlBuffer[1] != 'P') ||
@@ -154,8 +120,8 @@ bool CWmtsIf::GetMapPngBuffer(int Zoom,
       return false;
 
    // output the curl buffer to the png file buffer
-   *PngFileBuffer = mCurlBuffer;
-   Size = mSize;
+   *PngFileBuffer = mCurlBuffer.data();
+   Size = mCurlBuffer.size();
 
    return true;
 }

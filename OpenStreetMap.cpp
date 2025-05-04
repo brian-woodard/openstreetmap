@@ -12,6 +12,7 @@
 
 const double EQUATOR_CIRCUMFERENCE_M = 40075017.0;
 const double DEGREES_TO_RADIANS      = M_PI / 180.0;
+const double RADIANS_TO_DEGREES      = 180.0 / M_PI;
 const double M_TO_DEG                = 1.0 / 111120.0;
 
 COpenStreetMap::COpenStreetMap()
@@ -315,8 +316,12 @@ void COpenStreetMap::UpdateCache(TTileList&          TileList,
 
 void COpenStreetMap::Draw()
 {
+   static int prev_center_tile_x = 0;
+   static int prev_center_tile_y = 0;
+   static int prev_center_tile_zoom = 0;
    int    center_tile_x;
    int    center_tile_y;
+   int    center_tile_zoom;
    double center_tile_pixels_x;
    double center_tile_pixels_y;
    double offset_pixels_x;
@@ -335,6 +340,17 @@ void COpenStreetMap::Draw()
       center_tile_pixels_y = (mDisplayList[0].Latitude - mMapCenterLat) / mDegPerPixNs;
       center_tile_x        = mDisplayList[0].TileX;
       center_tile_y        = mDisplayList[0].TileY;
+      center_tile_zoom     = mDisplayList[0].ZoomLevel;
+
+      if (center_tile_x != prev_center_tile_x ||
+          center_tile_y != prev_center_tile_y ||
+          center_tile_zoom != prev_center_tile_zoom)
+      {
+         prev_center_tile_x = center_tile_x;
+         prev_center_tile_y = center_tile_y;
+         prev_center_tile_zoom = center_tile_zoom;
+         ExecApiLogWarning("Center tile %d_%d_%d", center_tile_zoom, center_tile_x, center_tile_y);
+      }
    }
 
    // loop through the display list
@@ -492,7 +508,7 @@ void COpenStreetMap::EnableSubframeBoundaries(bool Enable)
 double COpenStreetMap::GetLatitudeFromTileY(int Y, int Zoom) 
 {
    double n = M_PI - 2.0 * M_PI * (double)Y / (double)(1 << Zoom);
-   return 180.0 / M_PI * atan(0.5 * (exp(n) - exp(-n)));
+   return atan(0.5 * (exp(n) - exp(-n))) * RADIANS_TO_DEGREES;
 }
 
 double COpenStreetMap::GetLongitudeFromTileX(int X, int Zoom) 
@@ -788,7 +804,7 @@ bool COpenStreetMap::Open(bool        WmtsEnabled,
          got_capabilities = mWmtsIf.GetWmtsCapabilitiesXml(&buffer, size);
 
       // write the wms capabilities to the file
-      if (CachePath && got_capabilities)
+      if (CachePath && got_capabilities && size)
       {
          capabilities_filename = CachePath;
          capabilities_filename += "/osm_wmts_capabilities.xml";
@@ -797,7 +813,6 @@ bool COpenStreetMap::Open(bool        WmtsEnabled,
                capabilities_filename,
                std::ios::out | std::ios::binary | std::ios::trunc);
 
-         ExecApiLogWarning("Writing %d from %p", size, buffer);
          wmts_capabilities_file.write((char*)buffer, size);
 
          mWmtsOnline = true;

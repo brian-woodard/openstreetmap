@@ -2,6 +2,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 class CWmtsIf
 {
@@ -24,17 +25,13 @@ public:
 
 private:
 
-   void AppendToBuffer(void* Buffer, size_t Size);
-
    size_t CurlWriteFunction(void* Ptr, size_t Size, size_t Nmemb);
 
    static size_t RunCurlWriteFunction(
          void* Ptr, size_t Size, size_t Nmemb, void* Userdata);
 
-   unsigned char* mCurlBuffer;
-   std::string    mWmtsUrl;
-   size_t         mSize;
-   size_t         mSizeAllocated;
-   int            mTimeoutMsec;
-   bool           mIsOpen;
+   std::vector<unsigned char> mCurlBuffer;
+   std::string                mWmtsUrl;
+   int                        mTimeoutMsec;
+   bool                       mIsOpen;
 };
