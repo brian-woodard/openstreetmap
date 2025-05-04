@@ -32,6 +32,8 @@ COpenStreetMap::COpenStreetMap()
      mMetersPerPixEw(0.0),
      mMapScaleFactor(1.0f),
      mCoverageRadiusScaleFactor(1.0f),
+     mCenterTileX(0),
+     mCenterTileY(0),
      mMapWidthPix(0),
      mMapHeightPix(0),
      mZoomLevel(0),
@@ -57,18 +59,6 @@ void COpenStreetMap::Close()
       mTerminateCoverageThread = true;
       mCoverageThread.join();
    }
-
-#if 0
-   for (int i = 0; i < mDisplayListTrash.size(); i++)
-   {
-      if (mDisplayListTrash[i].Texture)
-      {
-         mDisplayListTrash[i].Texture->Delete();
-         delete mDisplayListTrash[i].Texture;
-      }
-   }
-   mDisplayListTrash.clear();
-#endif
 }
 
 std::string COpenStreetMap::ConstructFilename(int Zoom, int X, int Y)
@@ -131,11 +121,11 @@ void COpenStreetMap::CoverageThread()
 
          // calculate the coverage radius in pixels as the greatest diagonal
          // from the map center of rotation offset to a corner of the window
-         double coverage_radial_x = (window_width / 2.0) * coverage_radius_scale_factor * scale_x / map_zoom;
-         double coverage_radial_y = (window_height / 2.0) * coverage_radius_scale_factor * scale_y / map_zoom;
+         double coverage_radial_x = (window_width / 2.0) * coverage_radius_scale_factor * scale_x;
+         double coverage_radial_y = (window_height / 2.0) * coverage_radius_scale_factor * scale_y;
 
          coverage_radius_pixels = sqrt((coverage_radial_x * coverage_radial_x) +
-                                       (coverage_radial_y * coverage_radial_y)) / map_zoom;
+                                       (coverage_radial_y * coverage_radial_y));
 
          if (mWmtsTimeout > 0)
          {
@@ -179,22 +169,6 @@ void COpenStreetMap::CoverageThread()
       // take a break
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
    }
-
-   // exiting .. grab the mutex to keep this chunk thread safe
-   mMutex.lock();
-
-   // put all of the images in the cache onto the display list trash to
-   // be deleted by the Close function
-   //for (int i = 0; i < image_cache.Size(); i++)
-   //{
-   //   TTile tile;
-   //   if (image_cache.Peek(tile, i))
-   //   {
-   //      mDisplayListTrash.push_back(tile);
-   //   }
-   //}
-
-   mMutex.unlock();
 }
 
 void COpenStreetMap::UpdateCache(TTileList&          TileList,
@@ -316,12 +290,6 @@ void COpenStreetMap::UpdateCache(TTileList&          TileList,
 
 void COpenStreetMap::Draw()
 {
-   static int prev_center_tile_x = 0;
-   static int prev_center_tile_y = 0;
-   static int prev_center_tile_zoom = 0;
-   int    center_tile_x;
-   int    center_tile_y;
-   int    center_tile_zoom;
    double center_tile_pixels_x;
    double center_tile_pixels_y;
    double offset_pixels_x;
@@ -331,26 +299,22 @@ void COpenStreetMap::Draw()
    mMutex.lock();
 
    mDrawUpdate = true;
+   mMapScaleX = mMapZoom * cos(mMapCenterLat * DEGREES_TO_RADIANS);
+   mMapScaleY = mMapZoom * cos(mMapCenterLat * DEGREES_TO_RADIANS);
 
    if (mDisplayList.size())
    {
       // calculate the image offset in pixels from the map center of rotation
       // for the center tile
-      center_tile_pixels_x = (mDisplayList[0].Longitude - mMapCenterLon) / mDegPerPixEw;
-      center_tile_pixels_y = (mDisplayList[0].Latitude - mMapCenterLat) / mDegPerPixNs;
-      center_tile_x        = mDisplayList[0].TileX;
-      center_tile_y        = mDisplayList[0].TileY;
-      center_tile_zoom     = mDisplayList[0].ZoomLevel;
-
-      if (center_tile_x != prev_center_tile_x ||
-          center_tile_y != prev_center_tile_y ||
-          center_tile_zoom != prev_center_tile_zoom)
-      {
-         prev_center_tile_x = center_tile_x;
-         prev_center_tile_y = center_tile_y;
-         prev_center_tile_zoom = center_tile_zoom;
-         ExecApiLogWarning("Center tile %d_%d_%d", center_tile_zoom, center_tile_x, center_tile_y);
-      }
+      center_tile_pixels_x = (mDisplayList[0].Longitude - mMapCenterLon) / mDegPerPixEw * mMapZoom;
+      center_tile_pixels_y = (mDisplayList[0].Latitude - mMapCenterLat) / mDegPerPixNs * mMapZoom;
+      mCenterTileX         = mDisplayList[0].TileX;
+      mCenterTileY         = mDisplayList[0].TileY;
+   }
+   else
+   {
+      mCenterTileX = 0;
+      mCenterTileY = 0;
    }
 
    // loop through the display list
@@ -364,11 +328,8 @@ void COpenStreetMap::Draw()
       if (tile.ZoomLevel != mZoomLevel)
          continue;
 
-      mMapScaleX = mMapZoom;
-      mMapScaleY = mMapZoom;
-
-      offset_pixels_x = (tile.TileX - center_tile_x) * OSM_TILE_SIZE * mMapScaleX;
-      offset_pixels_y = -(tile.TileY - center_tile_y) * OSM_TILE_SIZE * mMapScaleY;
+      offset_pixels_x = (tile.TileX - mCenterTileX) * OSM_TILE_SIZE * mMapScaleX;
+      offset_pixels_y = -(tile.TileY - mCenterTileY) * OSM_TILE_SIZE * mMapScaleY;
 
       glm::mat4 model(1.0f);
 

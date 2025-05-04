@@ -18,10 +18,11 @@
 #include "Texture.h"
 #include "OpenStreetMap.h"
 
-#define WIDTH         640
-#define HEIGHT        480
-#define FRAME_RATE    60
-#define TIME_CONSTANT 0.2
+#define WIDTH              640
+#define HEIGHT             480
+#define FRAME_RATE         60
+#define TIME_CONSTANT      0.2
+#define DEGREES_TO_RADIANS M_PI / 180.0
 
 std::shared_ptr<CShader> shader_rect = nullptr;
 std::shared_ptr<CShader> shader_line = nullptr;
@@ -74,12 +75,16 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
       case GLFW_KEY_RIGHT:
          press_right = (action != GLFW_RELEASE);
          break;
+      case GLFW_KEY_Z:
+         if (action == GLFW_PRESS && (mods & GLFW_MOD_SHIFT))
+            mouse_wheel_delta -= 1.0;
+         else if (action == GLFW_PRESS && !(mods & GLFW_MOD_SHIFT))
+            mouse_wheel_delta += 1.0;
+         break;
       default:
          break;
    }
 }
-
-float rect[4] = { 50.0f, 50.0f, 250.0f, 250.0f };
 
 void render()
 {
@@ -120,21 +125,28 @@ void render()
    lines.SetVertices(&points);
    lines.Render(mvp);
 
+   double delta_pos = 0.0002 * (map_scale_factor / 35000.0) * 0.5;
+   double longitude_factor = 1.0 / cos(latitude * DEGREES_TO_RADIANS);
+
    if (press_up)
    {
-      latitude += 0.0001;
+      latitude += delta_pos * cos(map_rotation * DEGREES_TO_RADIANS);
+      longitude += delta_pos * sin(map_rotation * DEGREES_TO_RADIANS) * longitude_factor;
    }
    if (press_down)
    {
-      latitude -= 0.0001;
+      latitude -= delta_pos * cos(map_rotation * DEGREES_TO_RADIANS);
+      longitude -= delta_pos * sin(map_rotation * DEGREES_TO_RADIANS) * longitude_factor;
    }
    if (press_left)
    {
-      longitude -= 0.0001 / cos(latitude * M_PI / 180.0);
+      latitude -= delta_pos * cos((map_rotation + 90.0) * DEGREES_TO_RADIANS);
+      longitude -= delta_pos * sin((map_rotation + 90.0) * DEGREES_TO_RADIANS) * longitude_factor;
    }
    if (press_right)
    {
-      longitude += 0.0001 / cos(latitude * M_PI / 180.0);
+      latitude += delta_pos * cos((map_rotation + 90.0) * DEGREES_TO_RADIANS);
+      longitude += delta_pos * sin((map_rotation + 90.0) * DEGREES_TO_RADIANS) * longitude_factor;
    }
 
    // Map scaling
@@ -257,6 +269,7 @@ int main(int argc, char* argv[])
       ImGui::SliderInt("Map Width", &map_width, WIDTH, WIDTH * 2);
       ImGui::SliderInt("Map Height", &map_height, HEIGHT, HEIGHT * 2);
       ImGui::Text("Lat/Lon: (%f, %f)", latitude, longitude);
+      ImGui::Text("Center tile: %d_%d_%d.png", map.GetZoomLevel(), map.GetCenterTileX(), map.GetCenterTileY());
       ImGui::Text("Zoom Level: %d (%f)", map.GetZoomLevel(), map.GetMapZoom());
       ImGui::Text("Scale: %f", scale);
       ImGui::End();

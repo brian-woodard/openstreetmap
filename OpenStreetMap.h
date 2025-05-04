@@ -28,6 +28,8 @@ public:
 
    void EnableSubframeBoundaries(bool Enable);
 
+   int GetCenterTileX() const { return mCenterTileX; }
+   int GetCenterTileY() const { return mCenterTileY; }
    double GetMapZoom() const { return mMapZoom; }
    int GetZoomLevel() const { return mZoomLevel; }
 
@@ -139,6 +141,8 @@ private:
    double                   mMetersPerPixEw;
    float                    mMapScaleFactor;
    float                    mCoverageRadiusScaleFactor;
+   int                      mCenterTileX;
+   int                      mCenterTileY;
    int                      mMapWidthPix;
    int                      mMapHeightPix;
    int                      mZoomLevel;
