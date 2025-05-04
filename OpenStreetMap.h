@@ -7,6 +7,7 @@
 #include <mutex>
 #include <memory>
 #include <glm/glm.hpp>
+#include "WmtsIf.h"
 #include "Shader.h"
 #include "Cache.h"
 #include "Texture.h"
@@ -111,7 +112,7 @@ private:
 
    void GetZoom();
 
-   //CVOsmIf            mWmtsIf;
+   CWmtsIf                  mWmtsIf;
    std::thread              mCoverageThread;
    std::mutex               mMutex;
    std::vector<TTile>       mDisplayList;
