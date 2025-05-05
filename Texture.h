@@ -13,7 +13,7 @@ public:
    static std::unordered_map<std::string, std::shared_ptr<CTexture>> TextureMap;
    static std::vector<std::string> AvailableTextures;
 
-   CTexture(const char* Filename);
+   CTexture(const char* Filename, bool DisableOutput);
    ~CTexture();
 
    static void DeleteTextures();
@@ -37,4 +37,5 @@ private:
    int          mChannels;
 };
 
-std::shared_ptr<CTexture> GetOrCreateTexture(const char* Filename);
+std::shared_ptr<CTexture> GetOrCreateTexture(const char* Filename, bool DisableOutput = false);
+bool DeleteTexture(const char* Filename);

@@ -179,13 +179,6 @@ void COpenStreetMap::UpdateCache(TTileList&          TileList,
    std::string png_filename;
    bool        got_file = false;
 
-   static int prev_size = 0;
-   if (ImageCache.Size() != prev_size)
-   {
-      prev_size = ImageCache.Size();
-      ExecApiLogMessage("Cache size %d", prev_size);
-   }
-
    // loop over the subframe coverage list
    for (int i = 0; i < TileList.size(); i++)
    {
@@ -318,7 +311,7 @@ void COpenStreetMap::Draw()
    {
       if (!tile.Texture)
       {
-         tile.Texture = GetOrCreateTexture(tile.Filename.c_str());
+         tile.Texture = GetOrCreateTexture(tile.Filename.c_str(), true);
       }
 
       if (tile.ZoomLevel != mZoomLevel)
@@ -369,7 +362,13 @@ void COpenStreetMap::Draw()
    }
 
    // Delete any tiles that have been evicted from the cache
-   // TODO: Delete/remove textures from TextureMap and AvailableTextures
+   if (mDisplayListTrash.size())
+   {
+      for (const auto& tile : mDisplayListTrash)
+      {
+         DeleteTexture(tile.Filename.c_str());
+      }
+   }
    mDisplayListTrash.clear();
 
    // release the mutex
