@@ -109,7 +109,7 @@ private:
 
    double GetMetersPerPixelNs(int Zoom);
 
-   void GetTileList(TTileList& TileList, double MapCenterLat, double MapCenterLon, int ZoomLevel, double CoverageRadiusPixels);
+   void GetTileList(TTileList& TileList, double MapCenterLat, double MapCenterLon, int ZoomLevel, double ScaleX, double CoverageRadiusPixels);
 
    int GetTileX(double Longitude, int Zoom);
 
