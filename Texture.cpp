@@ -9,7 +9,7 @@
 std::unordered_map<std::string, std::shared_ptr<CTexture>> CTexture::TextureMap;
 std::vector<std::string> CTexture::AvailableTextures;
 
-CTexture::CTexture(const char* Filename)
+CTexture::CTexture(const char* Filename, bool DisableOutput)
    : mFilename(Filename),
      mTextureId(0),
      mWidth(0),
@@ -31,7 +31,8 @@ CTexture::CTexture(const char* Filename)
    glGenTextures(1, &mTextureId);
    glBindTexture(GL_TEXTURE_2D, mTextureId);
 
-   printf("Loaded texture %d %s (%d, %d) channels %d\n", mTextureId, mFilename.c_str(), mWidth, mHeight, mChannels);
+   if (!DisableOutput)
+      printf("Loaded texture %d %s (%d, %d) channels %d\n", mTextureId, mFilename.c_str(), mWidth, mHeight, mChannels);
 
    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -76,13 +77,29 @@ void CTexture::DeleteTexture()
 {
    if (mTextureId)
    {
-      printf("Delete texture %d\n", mTextureId);
       glDeleteTextures(1, &mTextureId);
       mTextureId = 0;
    }
 }
 
-std::shared_ptr<CTexture> GetOrCreateTexture(const char* Filename)
+bool DeleteTexture(const char* Filename)
+{
+   if (!CTexture::TextureMap.erase(Filename))
+      return false;
+
+   for (size_t i = 0; i < CTexture::AvailableTextures.size(); i++)
+   {
+      if (CTexture::AvailableTextures[i] == Filename)
+      {
+         CTexture::AvailableTextures.erase(CTexture::AvailableTextures.begin() + i);
+         return true;
+      }
+   }
+
+   return false;
+}
+
+std::shared_ptr<CTexture> GetOrCreateTexture(const char* Filename, bool DisableOutput)
 {
    std::shared_ptr<CTexture> texture_ptr = nullptr;
 
@@ -93,7 +110,7 @@ std::shared_ptr<CTexture> GetOrCreateTexture(const char* Filename)
    else
    {
       // Try loading the texture
-      texture_ptr = std::make_shared<CTexture>(Filename);
+      texture_ptr = std::make_shared<CTexture>(Filename, DisableOutput);
       if (texture_ptr->GetTexture())
       {
          CTexture::TextureMap[Filename] = texture_ptr;
