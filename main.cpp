@@ -125,7 +125,7 @@ void render()
    lines.SetVertices(&points);
    lines.Render(mvp);
 
-   double delta_pos = 0.0002 * (map_scale_factor / 35000.0) * 0.5;
+   double delta_pos = 0.0005 * (map_scale_factor / 35000.0) * 0.5;
    double longitude_factor = 1.0 / cos(latitude * DEGREES_TO_RADIANS);
 
    if (press_up)
@@ -234,7 +234,7 @@ int main(int argc, char* argv[])
    using framerate = std::chrono::duration<double, std::ratio<1, FRAME_RATE>>;
    auto frame_time = std::chrono::high_resolution_clock::now() + framerate{1};
 
-   map.Open(true, "172.31.99.126:8080", true, "data/map");
+   map.Open(true, "192.168.1.151:8080", true, "data/map");
    map.SetCoverageRadiusScaleFactor(1.0f);
    map.SetMapRotation(0.0f);
    map.SetShaders(shader_rect, shader_line);

@@ -87,7 +87,6 @@ void COpenStreetMap::CoverageThread()
    double             coverage_radius_pixels;
    double             scale_x;
    double             scale_y;
-   double             map_zoom;
    int                zoom_level;
    int                window_width;
    int                window_height;
@@ -112,7 +111,6 @@ void COpenStreetMap::CoverageThread()
          coverage_radius_scale_factor = mCoverageRadiusScaleFactor;
          scale_x                      = mMapScaleX;
          scale_y                      = mMapScaleY;
-         map_zoom                     = mMapZoom;
          zoom_level                   = mZoomLevel;
          window_width                 = mMapWidthPix;
          window_height                = mMapHeightPix;
@@ -121,8 +119,8 @@ void COpenStreetMap::CoverageThread()
 
          // calculate the coverage radius in pixels as the greatest diagonal
          // from the map center of rotation offset to a corner of the window
-         double coverage_radial_x = (window_width / 2.0) * coverage_radius_scale_factor * scale_x;
-         double coverage_radial_y = (window_height / 2.0) * coverage_radius_scale_factor * scale_y;
+         double coverage_radial_x = (window_width * 0.5) * coverage_radius_scale_factor;
+         double coverage_radial_y = (window_height * 0.5) * coverage_radius_scale_factor;
 
          coverage_radius_pixels = sqrt((coverage_radial_x * coverage_radial_x) +
                                        (coverage_radial_y * coverage_radial_y));
@@ -138,7 +136,7 @@ void COpenStreetMap::CoverageThread()
 
          // get the tile list
          tile_list.clear();
-         GetTileList(tile_list, map_center_lat, map_center_lon, zoom_level, coverage_radius_pixels);
+         GetTileList(tile_list, map_center_lat, map_center_lon, zoom_level, scale_x, coverage_radius_pixels);
 
          // update the image cache
          UpdateCache(tile_list,
@@ -299,8 +297,6 @@ void COpenStreetMap::Draw()
    mMutex.lock();
 
    mDrawUpdate = true;
-   mMapScaleX = mMapZoom * cos(mMapCenterLat * DEGREES_TO_RADIANS);
-   mMapScaleY = mMapZoom * cos(mMapCenterLat * DEGREES_TO_RADIANS);
 
    if (mDisplayList.size())
    {
@@ -487,7 +483,7 @@ double COpenStreetMap::GetMetersPerPixelNs(int Zoom)
    return EQUATOR_CIRCUMFERENCE_M / (double)(1 << (Zoom + 8));
 }
 
-void COpenStreetMap::GetTileList(TTileList& TileList, double MapCenterLat, double MapCenterLon, int ZoomLevel, double CoverageRadiusPixels)
+void COpenStreetMap::GetTileList(TTileList& TileList, double MapCenterLat, double MapCenterLon, int ZoomLevel, double ScaleX, double CoverageRadiusPixels)
 {
    TCacheTag tile;
    int       max_tiles = (1 << ZoomLevel);
@@ -609,7 +605,7 @@ void COpenStreetMap::GetTileList(TTileList& TileList, double MapCenterLat, doubl
                break;
 
             // check if level is enough to meet the coverage area
-            double pixels_in_level = ((level * 2.0) + 1.0) * OSM_TILE_SIZE;
+            double pixels_in_level = ((level * 2.0) + 1.0) * OSM_TILE_SIZE * 0.5 * ScaleX;
 
             if (pixels_in_level > CoverageRadiusPixels)
                complete = true;
@@ -737,6 +733,8 @@ void COpenStreetMap::GetZoom()
       mZoomLevel = 20;
       mMapZoom = 1000.0 / mMapScaleFactor;
    }
+   mMapScaleX = mMapZoom * cos(mMapCenterLat * DEGREES_TO_RADIANS);
+   mMapScaleY = mMapZoom * cos(mMapCenterLat * DEGREES_TO_RADIANS);
 }
 
 bool COpenStreetMap::Open(bool        WmtsEnabled,
