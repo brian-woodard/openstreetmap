@@ -15,6 +15,7 @@
 #define OSM_IMAGE_CACHE_SIZE 1024
 #define OSM_TILE_SIZE        256
 #define SERVER_TIMEOUT       200 // cycles before trying server again
+#define MAX_ZOOM_LEVELS      21
 
 class COpenStreetMap
 {
@@ -26,6 +27,7 @@ public:
 
    void Draw();
 
+   void EnableEasing(bool Enable);
    void EnableSubframeBoundaries(bool Enable);
 
    int GetCenterTileX() const { return mCenterTileX; }
@@ -41,6 +43,8 @@ public:
    void SetCoverageRadiusScaleFactor(float ScaleFactor) { mCoverageRadiusScaleFactor = ScaleFactor; }
 
    void SetMapCenter(double MapCenterLat, double MapCenterLon);
+
+   void SetMapOffset(int MapOffsetX, int MapOffsetY);
 
    void SetMapRotation(double RotationClockwiseDeg);
 
@@ -60,6 +64,8 @@ public:
 
 private:
 
+   static const double mMapScale[MAX_ZOOM_LEVELS];
+
    struct TTile
    {
       std::shared_ptr<CTexture> Texture;
@@ -69,6 +75,7 @@ private:
       int                       ZoomLevel;
       int                       TileX;
       int                       TileY;
+      int                       Age;
    };
 
    struct TCacheTag
@@ -121,6 +128,7 @@ private:
    std::thread              mCoverageThread;
    std::mutex               mMutex;
    std::vector<TTile>       mDisplayList;
+   std::vector<TTile>       mDisplayListEasing;
    std::vector<TTile>       mDisplayListTrash;
    std::string              mCachePath;
    std::string              mWmtsUrl;
@@ -143,12 +151,15 @@ private:
    float                    mCoverageRadiusScaleFactor;
    int                      mCenterTileX;
    int                      mCenterTileY;
+   int                      mMapOffsetX;
+   int                      mMapOffsetY;
    int                      mMapWidthPix;
    int                      mMapHeightPix;
    int                      mZoomLevel;
    int                      mWmtsTimeout;
    bool                     mTerminateCoverageThread;
    bool                     mDrawSubframeBoundaries;
+   bool                     mEasingEnabled;
    bool                     mCacheEnabled;
    bool                     mWmtsEnabled;
    bool                     mWmtsOnline;

@@ -14,6 +14,32 @@ const double EQUATOR_CIRCUMFERENCE_M = 40075017.0;
 const double DEGREES_TO_RADIANS      = M_PI / 180.0;
 const double RADIANS_TO_DEGREES      = 180.0 / M_PI;
 const double M_TO_DEG                = 1.0 / 111120.0;
+const int    EASE_AGE                = 120;
+
+const double COpenStreetMap::mMapScale[MAX_ZOOM_LEVELS] =
+{
+   500000000.0,
+   250000000.0,
+   150000000.0,
+   70000000.0,
+   35000000.0,
+   15000000.0,
+   10000000.0,
+   4000000.0,
+   2000000.0,
+   1000000.0,
+   500000.0,
+   250000.0,
+   150000.0,
+   70000.0,
+   35000.0,
+   15000.0,
+   8000.0,
+   4000.0,
+   2000.0,
+   1000.0,
+   1000.0,
+};
 
 COpenStreetMap::COpenStreetMap()
    : mShaderRect(nullptr),
@@ -34,12 +60,15 @@ COpenStreetMap::COpenStreetMap()
      mCoverageRadiusScaleFactor(1.0f),
      mCenterTileX(0),
      mCenterTileY(0),
+     mMapOffsetX(0),
+     mMapOffsetY(0),
      mMapWidthPix(0),
      mMapHeightPix(0),
      mZoomLevel(0),
      mWmtsTimeout(0),
      mTerminateCoverageThread(false),
      mDrawSubframeBoundaries(false),
+     mEasingEnabled(false),
      mCacheEnabled(false),
      mWmtsEnabled(false),
      mWmtsOnline(false),
@@ -90,20 +119,19 @@ void COpenStreetMap::CoverageThread()
    int                zoom_level;
    int                window_width;
    int                window_height;
+   int                prev_zoom_level = 0;
+   bool               easing_enabled;
 
    // loop until terminated
    while (!mTerminateCoverageThread)
    {
       mMutex.lock();
       bool update = mDrawUpdate;
+      mDrawUpdate = false;
       mMutex.unlock();
 
       if (update)
       {
-         // clear the display list and display list trash scratchpads
-         display_list_scratchpad.clear();
-         display_list_trash_scratchpad.clear();
-
          // snapshot things that need to be thread safe
          mMutex.lock();
          map_center_lat               = mMapCenterLat;
@@ -114,7 +142,21 @@ void COpenStreetMap::CoverageThread()
          zoom_level                   = mZoomLevel;
          window_width                 = mMapWidthPix;
          window_height                = mMapHeightPix;
-         mDrawUpdate                  = false;
+         easing_enabled               = mEasingEnabled;
+
+         if (easing_enabled)
+         {
+            if (mDisplayList.size() && prev_zoom_level != zoom_level)
+            {
+               for (auto& tile : mDisplayList)
+               {
+                  tile.Age = EASE_AGE;
+                  mDisplayListEasing.push_back(tile);
+               }
+            }
+         }
+         prev_zoom_level = zoom_level;
+
          mMutex.unlock();
 
          // calculate the coverage radius in pixels as the greatest diagonal
@@ -138,34 +180,23 @@ void COpenStreetMap::CoverageThread()
          tile_list.clear();
          GetTileList(tile_list, map_center_lat, map_center_lon, zoom_level, scale_x, coverage_radius_pixels);
 
+         // clear the display list and display list trash scratchpads
+         display_list_scratchpad.clear();
+         display_list_trash_scratchpad.clear();
+
          // update the image cache
          UpdateCache(tile_list,
                      display_list_scratchpad,
                      display_list_trash_scratchpad,
                      image_cache);
 
-         // grab the mutex to make this chunk of code thread safe
          mMutex.lock();
-
-         // copy the display list scratchpad to the display list to be drawn
-         // in the Draw routine.  This is necessary to be in the correct drawing
-         // context when the image is drawn.
          mDisplayList = display_list_scratchpad;
-
-         // copy the display list trash scratchpad to the display list trash
-         // to be emptied in the Draw routine.  This is necessary to be in
-         // the correct drawing context when the image is deleted.
-         for (int i = 0; i < display_list_trash_scratchpad.size(); i++)
-         {
-            mDisplayListTrash.push_back(display_list_trash_scratchpad[i]);
-         }
-
-         // release the mutex
+         mDisplayListTrash = display_list_trash_scratchpad;
          mMutex.unlock();
       }
 
-      // take a break
-      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
    }
 }
 
@@ -209,10 +240,10 @@ void COpenStreetMap::UpdateCache(TTileList&          TileList,
 
             // get the png file from the WMTS server
             got_file = mWmtsIf.GetMapPngBuffer(TileList[i].Zoom,
-                                              TileList[i].X,
-                                              TileList[i].Y,
-                                              &buffer,
-                                              size);
+                                               TileList[i].X,
+                                               TileList[i].Y,
+                                               &buffer,
+                                               size);
 
             if (got_file)
             {
@@ -274,7 +305,7 @@ void COpenStreetMap::UpdateCache(TTileList&          TileList,
          ImageCache.PutFront(tile, TileList[i]);
       }
 
-      // add the new image to the display list scratchpad
+      // add the tile to the display list scratchpad
       DisplayListScratchpad.push_back(tile);
    }
 }
@@ -283,8 +314,13 @@ void COpenStreetMap::Draw()
 {
    double center_tile_pixels_x;
    double center_tile_pixels_y;
+   double center_tile_x;
+   double center_tile_y;
    double offset_pixels_x;
    double offset_pixels_y;
+   double map_zoom;
+   double map_scale_x;
+   double map_scale_y;
 
    // grab the mutex
    mMutex.lock();
@@ -295,10 +331,15 @@ void COpenStreetMap::Draw()
    {
       // calculate the image offset in pixels from the map center of rotation
       // for the center tile
-      center_tile_pixels_x = (mDisplayList[0].Longitude - mMapCenterLon) / mDegPerPixEw * mMapZoom;
-      center_tile_pixels_y = (mDisplayList[0].Latitude - mMapCenterLat) / mDegPerPixNs * mMapZoom;
-      mCenterTileX         = mDisplayList[0].TileX;
-      mCenterTileY         = mDisplayList[0].TileY;
+      map_zoom             = mMapZoom;
+      map_scale_x          = mMapScaleX;
+      map_scale_y          = mMapScaleY;
+      center_tile_pixels_x = (mDisplayList[0].Longitude - mMapCenterLon) / mDegPerPixEw * map_zoom;
+      center_tile_pixels_y = (mDisplayList[0].Latitude - mMapCenterLat) / mDegPerPixNs * map_zoom;
+      center_tile_x        = mDisplayList[0].TileX;
+      center_tile_y        = mDisplayList[0].TileY;
+      mCenterTileX         = mCenterTileX;
+      mCenterTileY         = mCenterTileY;
    }
    else
    {
@@ -314,19 +355,20 @@ void COpenStreetMap::Draw()
          tile.Texture = GetOrCreateTexture(tile.Filename.c_str(), true);
       }
 
-      if (tile.ZoomLevel != mZoomLevel)
+      if (!tile.Texture || tile.ZoomLevel != mZoomLevel)
          continue;
 
-      offset_pixels_x = (tile.TileX - mCenterTileX) * OSM_TILE_SIZE * mMapScaleX;
-      offset_pixels_y = -(tile.TileY - mCenterTileY) * OSM_TILE_SIZE * mMapScaleY;
+      offset_pixels_x = (tile.TileX - center_tile_x) * OSM_TILE_SIZE * map_scale_x;
+      offset_pixels_y = -(tile.TileY - center_tile_y) * OSM_TILE_SIZE * map_scale_y;
 
       glm::mat4 model(1.0f);
 
+      model = glm::translate(model, glm::vec3(mMapOffsetX, mMapOffsetY, 0.0f));
       model = glm::rotate(model, (float)(-mMapRotation * DEGREES_TO_RADIANS), glm::vec3(0.0f, 0.0f, 1.0f));
       model = glm::translate(model, glm::vec3(center_tile_pixels_x + offset_pixels_x,
                                               center_tile_pixels_y + offset_pixels_y,
                                               0.0f));
-      model = glm::scale(model, glm::vec3(mMapScaleX, mMapScaleY, 0.0f));
+      model = glm::scale(model, glm::vec3(map_scale_x, map_scale_y, 0.0f));
 
       CGlRect tile_rect = CGlRect(mShaderRect, 0.0f, 0.0f, (float)OSM_TILE_SIZE, (float)OSM_TILE_SIZE);
 
@@ -361,6 +403,75 @@ void COpenStreetMap::Draw()
       }
    }
 
+   if (mEasingEnabled)
+   {
+      if (mDisplayListEasing.size())
+      {
+         // calculate the image offset in pixels from the map center of rotation
+         // for the center tile
+         int    zoom_level        = mDisplayListEasing[0].ZoomLevel;
+         double meters_per_pix_ew = GetMetersPerPixelEw(mMapCenterLat, zoom_level);
+         double meters_per_pix_ns = GetMetersPerPixelNs(zoom_level);
+         double deg_per_pix_ew    = meters_per_pix_ew * M_TO_DEG;
+         double deg_per_pix_ns    = meters_per_pix_ns * M_TO_DEG;
+
+         map_zoom             = mMapScale[zoom_level] / mMapScaleFactor;
+         map_scale_x          = map_zoom * cos(mMapCenterLat * DEGREES_TO_RADIANS);
+         map_scale_y          = map_zoom * cos(mMapCenterLat * DEGREES_TO_RADIANS);
+         center_tile_pixels_x = (mDisplayListEasing[0].Longitude - mMapCenterLon) / deg_per_pix_ew * map_zoom;
+         center_tile_pixels_y = (mDisplayListEasing[0].Latitude - mMapCenterLat) / deg_per_pix_ns * map_zoom;
+         center_tile_x        = mDisplayListEasing[0].TileX;
+         center_tile_y        = mDisplayListEasing[0].TileY;
+      }
+
+      // loop through the easing display list
+      for (auto& tile : mDisplayListEasing)
+      {
+         if (!tile.Texture)
+         {
+            tile.Texture = GetOrCreateTexture(tile.Filename.c_str(), true);
+         }
+
+         if (!tile.Texture)
+            continue;
+
+         offset_pixels_x = (tile.TileX - center_tile_x) * OSM_TILE_SIZE * map_scale_x;
+         offset_pixels_y = -(tile.TileY - center_tile_y) * OSM_TILE_SIZE * map_scale_y;
+
+         glm::mat4 model(1.0f);
+
+         model = glm::translate(model, glm::vec3(mMapOffsetX, mMapOffsetY, 0.0f));
+         model = glm::rotate(model, (float)(-mMapRotation * DEGREES_TO_RADIANS), glm::vec3(0.0f, 0.0f, 1.0f));
+         model = glm::translate(model, glm::vec3(center_tile_pixels_x + offset_pixels_x,
+                                                 center_tile_pixels_y + offset_pixels_y,
+                                                 0.0f));
+         model = glm::scale(model, glm::vec3(map_scale_x, map_scale_y, 0.0f));
+
+         CGlRect tile_rect = CGlRect(mShaderRect, 0.0f, 0.0f, (float)OSM_TILE_SIZE, (float)OSM_TILE_SIZE);
+
+         tile_rect.SetModelMatrix(model);
+         tile_rect.SetTexture(tile.Texture);
+         float alpha = (float)tile.Age / (float)EASE_AGE;
+         tile_rect.SetColor(glm::vec4(alpha));
+         tile_rect.Render(mMapProjection);
+
+         tile.Age--;
+      }
+
+      // Delete any easing tiles that have aged out
+      for (auto it = mDisplayListEasing.begin(); it != mDisplayListEasing.end();)
+      {
+         if (it->Age <= 0)
+         {
+            it = mDisplayListEasing.erase(it);
+         }
+         else
+         {
+            it++;
+         }
+      }
+   }
+
    // Delete any tiles that have been evicted from the cache
    if (mDisplayListTrash.size())
    {
@@ -380,6 +491,7 @@ void COpenStreetMap::Draw()
       std::vector<glm::vec3> points;
       CGlLineStrip           viewport = CGlLineStrip(mShaderLine, 0.0f, 0.0f, 0.0f, 0.0f);
       CGlRect                rect = CGlRect(mShaderRect, 0.0f, 0.0f, mMapWidthPix, mMapHeightPix);
+      glm::mat4              model(1.0f);
 
       points.push_back(glm::vec3(-(float)mMapWidthPix * 0.5f, -(float)mMapHeightPix * 0.5f, 0.0f));
       points.push_back(glm::vec3(-(float)mMapWidthPix * 0.5f,  (float)mMapHeightPix * 0.5f, 0.0f));
@@ -387,12 +499,16 @@ void COpenStreetMap::Draw()
       points.push_back(glm::vec3( (float)mMapWidthPix * 0.5f, -(float)mMapHeightPix * 0.5f, 0.0f));
       points.push_back(glm::vec3(-(float)mMapWidthPix * 0.5f, -(float)mMapHeightPix * 0.5f, 0.0f));
 
+      model = glm::translate(model, glm::vec3(mMapOffsetX, mMapOffsetY, 0.0f));
+
       viewport.SetLineWidth(3.0f);
       viewport.SetColor(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
       viewport.SetVertices(&points);
+      viewport.SetModelMatrix(model);
       viewport.Render(mMapProjection);
    
       rect.SetColor(glm::vec4(1.0f, 1.0f, 0.0f, 0.2f));
+      rect.SetModelMatrix(model);
       rect.Render(mMapProjection);
 
       // draw coverage area
@@ -415,11 +531,14 @@ void COpenStreetMap::Draw()
       points.push_back(glm::vec3( coverage_radius_pixels, -coverage_radius_pixels, 0.0f));
       points.push_back(glm::vec3(-coverage_radius_pixels, -coverage_radius_pixels, 0.0f));
 
+      model = glm::mat4(1.0f);
+      model = glm::translate(model, glm::vec3(mMapOffsetX, mMapOffsetY, 0.0f));
+      model = glm::rotate(model, (float)(-mMapRotation * DEGREES_TO_RADIANS), glm::vec3(0.0f, 0.0f, 1.0f));
+
       coverage.SetLineWidth(3.0f);
       coverage.SetColor(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
       coverage.SetVertices(&points);
-      coverage.SetModelMatrix(glm::mat4(1.0f));
-      coverage.SetRotation(-mMapRotation * DEGREES_TO_RADIANS);
+      coverage.SetModelMatrix(model);
       coverage.Render(mMapProjection);
    }
 }
@@ -454,6 +573,13 @@ void COpenStreetMap::EnableWmtsServer(bool Enable, const char* WmtsUrl)
       mWmtsEnabled = false;
       mWmtsUrl  = "";
    }
+}
+
+void COpenStreetMap::EnableEasing(bool Enable)
+{
+   mMutex.lock();
+   mEasingEnabled = Enable;
+   mMutex.unlock();
 }
 
 void COpenStreetMap::EnableSubframeBoundaries(bool Enable)
@@ -630,108 +756,89 @@ void COpenStreetMap::GetZoom()
    if (mMapScaleFactor >= 500000000.0)
    {
       mZoomLevel = 0;
-      mMapZoom = 500000000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 250000000.0)
    {
       mZoomLevel = 1;
-      mMapZoom = 250000000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 150000000.0)
    {
       mZoomLevel = 2;
-      mMapZoom = 150000000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 70000000.0)
    {
       mZoomLevel = 3;
-      mMapZoom = 70000000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 35000000.0)
    {
       mZoomLevel = 4;
-      mMapZoom = 35000000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 15000000.0)
    {
       mZoomLevel = 5;
-      mMapZoom = 15000000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 10000000.0)
    {
       mZoomLevel = 6;
-      mMapZoom = 10000000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 4000000.0)
    {
       mZoomLevel = 7;
-      mMapZoom = 4000000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 2000000.0)
    {
       mZoomLevel = 8;
-      mMapZoom = 2000000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 1000000.0)
    {
       mZoomLevel = 9;
-      mMapZoom = 1000000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 500000.0)
    {
       mZoomLevel = 10;
-      mMapZoom = 500000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 250000.0)
    {
       mZoomLevel = 11;
-      mMapZoom = 250000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 150000.0)
    {
       mZoomLevel = 12;
-      mMapZoom = 150000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 70000.0)
    {
       mZoomLevel = 13;
-      mMapZoom = 70000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 35000.0)
    {
       mZoomLevel = 14;
-      mMapZoom = 35000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 15000.0)
    {
       mZoomLevel = 15;
-      mMapZoom = 15000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 8000.0)
    {
       mZoomLevel = 16;
-      mMapZoom = 8000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 4000.0)
    {
       mZoomLevel = 17;
-      mMapZoom = 4000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 2000.0)
    {
       mZoomLevel = 18;
-      mMapZoom = 2000.0 / mMapScaleFactor;
    }
    else if (mMapScaleFactor >= 1000.0)
    {
       mZoomLevel = 19;
-      mMapZoom = 1000.0 / mMapScaleFactor;
    }
    else
    {
       mZoomLevel = 20;
-      mMapZoom = 1000.0 / mMapScaleFactor;
    }
+
+   mMapZoom = mMapScale[mZoomLevel] / mMapScaleFactor;
    mMapScaleX = mMapZoom * cos(mMapCenterLat * DEGREES_TO_RADIANS);
    mMapScaleY = mMapZoom * cos(mMapCenterLat * DEGREES_TO_RADIANS);
 }
@@ -795,6 +902,14 @@ void COpenStreetMap::SetMapCenter(double MapCenterLat, double MapCenterLon)
    mMutex.lock();
    mMapCenterLat = MapCenterLat;
    mMapCenterLon = MapCenterLon;
+   mMutex.unlock();
+}
+
+void COpenStreetMap::SetMapOffset(int MapOffsetX, int MapOffsetY)
+{
+   mMutex.lock();
+   mMapOffsetX = MapOffsetX;
+   mMapOffsetY = MapOffsetY;
    mMutex.unlock();
 }
 
