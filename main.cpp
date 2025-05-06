@@ -33,7 +33,9 @@ int map_width = WIDTH;
 int map_height = HEIGHT;
 COpenStreetMap map;
 float map_rotation = 0.0f;
-float map_scale_factor = 35000.0f;
+float map_scale_factor = 72000.0f;
+int map_offset_x = 0;
+int map_offset_y = 0;
 double latitude = 38.93916666;
 double longitude = -77.46;
 double scale = 1.0f;
@@ -42,6 +44,7 @@ double dt = 1.0 / FRAME_RATE;
 double scale_factor_c1 = exp(-dt / TIME_CONSTANT);
 double scale_factor_c2 = 1.0 - scale_factor_c1;
 bool draw_boundaries = false;
+bool enable_easing = false;
 bool press_up = false;
 bool press_down = false;
 bool press_left = false;
@@ -111,8 +114,10 @@ void render()
    map.SetMapCenter(latitude, longitude);
    map.SetMapRotation(map_rotation);
    map.SetMapScaleFactor(map_scale_factor);
+   map.EnableEasing(enable_easing);
    map.EnableSubframeBoundaries(draw_boundaries);
    map.SetMapSize(map_width, map_height);
+   map.SetMapOffset(map_offset_x, map_offset_y);
    map.Update();
    map.Draw();
 
@@ -202,6 +207,7 @@ int main(int argc, char* argv[])
    glfwSetWindowSize(window, WIDTH, HEIGHT);
    glfwSetScrollCallback(window, scroll_callback);
    glfwSetKeyCallback(window, key_callback);
+   //glfwSwapInterval(1);
 
    // Setup Dear ImGui
    IMGUI_CHECKVERSION();
@@ -264,10 +270,14 @@ int main(int argc, char* argv[])
 
       ImGui::Begin("Debug");
       ImGui::Checkbox("Draw Boundaries", &draw_boundaries);
+      ImGui::Checkbox("Enable Easing", &enable_easing);
+      ImGui::Text("Textures loaded: %ld, FPS: %.1f", CTexture::TextureMap.size(), ImGui::GetIO().Framerate);
       ImGui::SliderFloat("Map Rotation", &map_rotation, -180.0f, 180.0f);
       ImGui::SliderFloat("Map Scale Factor", &map_scale_factor, 35000.0f, 10000000.0f);
-      ImGui::SliderInt("Map Width", &map_width, WIDTH, WIDTH * 2);
-      ImGui::SliderInt("Map Height", &map_height, HEIGHT, HEIGHT * 2);
+      ImGui::SliderInt("Map Offset X", &map_offset_x, -200, 200);
+      ImGui::SliderInt("Map Offset Y", &map_offset_y, -200, 200);
+      ImGui::SliderInt("Map Width", &map_width, WIDTH * 0.5, WIDTH * 2);
+      ImGui::SliderInt("Map Height", &map_height, HEIGHT * 0.5, HEIGHT * 2);
       ImGui::Text("Lat/Lon: (%f, %f)", latitude, longitude);
       ImGui::Text("Center tile: %d_%d_%d.png", map.GetZoomLevel(), map.GetCenterTileX(), map.GetCenterTileY());
       ImGui::Text("Zoom Level: %d (%f)", map.GetZoomLevel(), map.GetMapZoom());
