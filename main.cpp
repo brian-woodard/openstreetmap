@@ -44,6 +44,8 @@ double dt = 1.0 / FRAME_RATE;
 double scale_factor_c1 = exp(-dt / TIME_CONSTANT);
 double scale_factor_c2 = 1.0 - scale_factor_c1;
 bool draw_boundaries = false;
+bool draw_border = false;
+bool clip_map = false;
 bool enable_easing = false;
 bool press_up = false;
 bool press_down = false;
@@ -92,7 +94,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 void render()
 {
    CGlLineStrip           lines = CGlLineStrip(shader_line, 0.0f, 0.0f, 0.0f, 0.0f);
-   CGlRect                rect = CGlRect(shader_rect, 0.0f, 0.0f, 100.0f, 100.0f);
+   CGlRect                rect1 = CGlRect(shader_rect, -25.0f, 25.0f, 50.0f, 50.0f);
+   CGlRect                rect2 = CGlRect(shader_rect, 25.0f, -25.0f, 50.0f, 50.0f);
    std::vector<glm::vec3> points;
    glm::mat4              mvp;
 
@@ -110,20 +113,25 @@ void render()
    points.push_back(glm::vec3( 10.0f, -10.0f, 0.0f));
    points.push_back(glm::vec3(-10.0f,  10.0f, 0.0f));
 
+   //rect1.SetColor(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+   //rect1.Render(mvp);
+
    map.SetProjection(mvp);
    map.SetMapCenter(latitude, longitude);
    map.SetMapRotation(map_rotation);
    map.SetMapScaleFactor(map_scale_factor);
    map.EnableEasing(enable_easing);
    map.EnableSubframeBoundaries(draw_boundaries);
+   map.EnableBorder(draw_border);
+   map.EnableClip(clip_map);
    map.SetMapSize(map_width, map_height);
+   map.SetWindowSize(window_width, window_height);
    map.SetMapOffset(map_offset_x, map_offset_y);
    map.Update();
    map.Draw();
 
-   //rect.SetColor(glm::vec4(1.0f));
-   //rect.SetTexture(texture);
-   //rect.Render(mvp);
+   //rect2.SetColor(glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
+   //rect2.Render(mvp);
 
    lines.SetColor(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
    lines.SetLineWidth(2.0f);
@@ -243,6 +251,7 @@ int main(int argc, char* argv[])
    map.Open(true, "192.168.1.151:8080", true, "data/map");
    map.SetCoverageRadiusScaleFactor(1.0f);
    map.SetMapRotation(0.0f);
+   map.SetBorderColor(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
    map.SetShaders(shader_rect, shader_line);
 
    while (window)
@@ -269,13 +278,17 @@ int main(int argc, char* argv[])
       ImGui::NewFrame();
 
       ImGui::Begin("Debug");
+      ImGui::Checkbox("Draw Border", &draw_border);
+      ImGui::SameLine();
+      ImGui::Checkbox("Clip", &clip_map);
+      ImGui::SameLine();
       ImGui::Checkbox("Draw Boundaries", &draw_boundaries);
       ImGui::Checkbox("Enable Easing", &enable_easing);
       ImGui::Text("Textures loaded: %ld, FPS: %.1f", CTexture::TextureMap.size(), ImGui::GetIO().Framerate);
       ImGui::SliderFloat("Map Rotation", &map_rotation, -180.0f, 180.0f);
       ImGui::SliderFloat("Map Scale Factor", &map_scale_factor, 35000.0f, 10000000.0f);
-      ImGui::SliderInt("Map Offset X", &map_offset_x, -200, 200);
-      ImGui::SliderInt("Map Offset Y", &map_offset_y, -200, 200);
+      ImGui::SliderInt("Map Offset X", &map_offset_x, -500, 500);
+      ImGui::SliderInt("Map Offset Y", &map_offset_y, -500, 500);
       ImGui::SliderInt("Map Width", &map_width, WIDTH * 0.5, WIDTH * 2);
       ImGui::SliderInt("Map Height", &map_height, HEIGHT * 0.5, HEIGHT * 2);
       ImGui::Text("Lat/Lon: (%f, %f)", latitude, longitude);

@@ -27,6 +27,8 @@ public:
 
    void Draw();
 
+   void EnableBorder(bool Enable) { mBorderEnabled = Enable; }
+   void EnableClip(bool Enable) { mClipEnabled = Enable; }
    void EnableEasing(bool Enable);
    void EnableSubframeBoundaries(bool Enable);
 
@@ -39,6 +41,8 @@ public:
              const char* WmtsUrl,
              bool        CacheEnabled,
              const char* CachePath);
+
+   void SetBorderColor(const glm::vec4& Color) { mBorderColor = Color; }
 
    void SetCoverageRadiusScaleFactor(float ScaleFactor) { mCoverageRadiusScaleFactor = ScaleFactor; }
 
@@ -59,6 +63,8 @@ public:
       mShaderRect = ShaderRect;
       mShaderLine = ShaderLine;
    }
+
+   void SetWindowSize(int WinWidthPix, int WinHeightPix);
 
    void Update();
 
@@ -133,6 +139,7 @@ private:
    std::string              mCachePath;
    std::string              mWmtsUrl;
    glm::mat4                mMapProjection;
+   glm::vec4                mBorderColor;
    std::shared_ptr<CShader> mShaderRect;
    std::shared_ptr<CShader> mShaderLine;
    TTile                    mNoDataTile;
@@ -155,6 +162,8 @@ private:
    int                      mMapOffsetY;
    int                      mMapWidthPix;
    int                      mMapHeightPix;
+   int                      mWinWidthPix;
+   int                      mWinHeightPix;
    int                      mZoomLevel;
    int                      mWmtsTimeout;
    bool                     mTerminateCoverageThread;
@@ -163,5 +172,6 @@ private:
    bool                     mCacheEnabled;
    bool                     mWmtsEnabled;
    bool                     mWmtsOnline;
-   bool                     mDrawUpdate;
+   bool                     mBorderEnabled;
+   bool                     mClipEnabled;
 };
